@@ -27,6 +27,7 @@ class AgentState(TypedDict, total=False):
 
     standalone_q: str
     carried_entities: list[str]
+    clarify: str
     route: Route
     plan: QueryPlan
 
@@ -37,4 +38,5 @@ class AgentState(TypedDict, total=False):
 
     draft: Draft
     claims: list[Claim]
+    useful: bool
     answer: Answer

@@ -11,6 +11,7 @@ import hashlib
 import re
 
 from .contracts import Evidence
+from .security.sanitize import datamark, strip_datamarks
 
 _SENT = re.compile(r"(?<=[.!?])\s+|\n+")
 
@@ -41,7 +42,7 @@ def build_evidence_block(evidence: Evidence, nonce: str) -> str:
             + "]"
         )
         lines.append(header)
-        lines.append(c.text)
+        lines.append(datamark(c.text))          # spotlight the span as uniformly-quoted data (C29)
     lines.append(f"EVIDENCE_END>>> (nonce: {nonce})")
     return "\n".join(lines)
 
@@ -60,7 +61,7 @@ def parse_evidence_blocks(prompt: str) -> list[dict]:
                 "chunk_id": m.group("id"),
                 "doc_id": m.group("doc"),
                 "page": int(m.group("page")),
-                "text": m.group("text").strip(),
+                "text": strip_datamarks(m.group("text").strip()),   # clean quotes for grounding
             }
         )
     return out

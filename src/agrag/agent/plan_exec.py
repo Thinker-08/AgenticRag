@@ -67,8 +67,10 @@ class PlanExecutor:
                             computations.append(comp)
                         return step, []
                     query, filters = step.query, None
+                    if step.depends_on:
+                        query = self._inject_deps(query, step.depends_on, results)  # multi-hop (05 §4)
                     if step.tool == Strategy.METADATA_FILTER:
-                        query, filters = await self._self_query(step.query, budget)
+                        query, filters = await self._self_query(query, budget)
                     docs = await self.deps.retriever.retrieve(
                         query,
                         tenant_id=tenant_id,
@@ -134,6 +136,17 @@ class PlanExecutor:
                         )
                     )
         return scored + extra
+
+    def _inject_deps(self, query: str, deps: list[str], results: dict[str, list[ScoredChunk]]) -> str:
+        """Splice the top evidence sentence from each completed dependency into step-2's query so a
+        multi-hop hop conditions on step-1's answer (05 §4 `inject_deps`)."""
+        ctx: list[str] = []
+        for dep in deps:
+            docs = results.get(dep) or []
+            if docs:
+                snippet = " ".join(docs[0].chunk.text.split())[:160]
+                ctx.append(snippet)
+        return f"{query} (context: {' | '.join(ctx)})" if ctx else query
 
     async def _self_query(self, query: str, budget: Budget) -> tuple[str, dict | None]:
         from ..retrieval.selfquery import self_query

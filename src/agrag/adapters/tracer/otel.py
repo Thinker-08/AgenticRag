@@ -65,9 +65,11 @@ class OtelTracer:
             yield span
 
     def event(self, name: str, **attrs) -> None:
+        from ...security.pii import scrub_attrs
+
         span = _current.get()
         if span is not None:
             try:
-                span.add_event(name, {k: str(v) for k, v in attrs.items()})
+                span.add_event(name, {k: str(v) for k, v in scrub_attrs(attrs).items()})
             except Exception:
                 pass

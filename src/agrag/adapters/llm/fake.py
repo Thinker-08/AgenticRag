@@ -206,9 +206,13 @@ class FakeLLM:
     def _mk_rewriteresult(self, prompt: str, schema: Type[T]) -> T:
         q = _query_of(prompt)
         entities = [e.strip() for e in extract_tag(prompt, "entities").split(",") if e.strip()]
+        pronoun = bool(re.search(r"\b(it|its|that|this|they|their|those|these)\b", q, re.I))
         standalone = q
-        if entities and re.search(r"\b(it|its|that|this|they|their)\b", q, re.I):
+        resolved = True
+        if pronoun and entities:
             standalone = f"{q} (regarding {', '.join(entities)})"
+        elif pronoun and not entities:
+            resolved = False        # unbound referent, nothing in history to bind it -> clarify (05 §9)
         fields = schema.model_fields
         data = {}
         if "standalone_query" in fields:
@@ -216,8 +220,21 @@ class FakeLLM:
         if "carried_entities" in fields:
             data["carried_entities"] = entities
         if "resolved" in fields:
-            data["resolved"] = True
+            data["resolved"] = resolved
         return schema(**data)
+
+    def _mk_plancritique(self, prompt: str, schema: Type[T]) -> T:
+        # flag steps whose (tool, query) duplicate an earlier one as redundant (05 §6)
+        seen: set[tuple[str, str]] = set()
+        redundant: list[str] = []
+        for m in re.finditer(r"(\S+): tool=(\S+) q=(.+)", prompt):
+            sid, tool, q = m.group(1), m.group(2), m.group(3).strip().lower()
+            key = (tool, q)
+            if key in seen:
+                redundant.append(sid)
+            else:
+                seen.add(key)
+        return schema(redundant_step_ids=redundant, rationale="heuristic-critique")
 
     def _mk_draft(self, prompt: str, schema: Type[T]) -> T:
         from ...contracts import AnswerFormat, Citation, DraftClaim

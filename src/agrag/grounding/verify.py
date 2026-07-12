@@ -21,6 +21,9 @@ class Judgement(BaseModel):
 
 
 def _quote_ok(quote: str, chunk_text: str, span: tuple[int, int]) -> bool:
+    from ..security.sanitize import strip_datamarks
+
+    quote = strip_datamarks(quote)          # a model may copy spotlighting marks; grounding ignores them
     if not quote:
         return False
     if quote in chunk_text:

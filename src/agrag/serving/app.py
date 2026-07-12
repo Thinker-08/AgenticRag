@@ -2,8 +2,9 @@
 
 State lives in backing stores, so any replica serves any request identically. The app + ingestion
 share one Deps bundle (one shared index) — the seam between the two planes. Per-tenant rate limiting
-(08 threat 6) and latency percentiles (09) live here; tenant_id is a placeholder for an auth-derived
-principal (production must NOT trust it from the body — see 08 threat 3).
+(08 threat 6) and latency percentiles (09) live here. When `serving.require_auth` is on, the tenant is
+taken from the `X-Tenant-Id` header (a stand-in for an authenticated principal) and the request body's
+tenant_id is NEVER trusted (08 threat 3) — the confused-deputy fix.
 """
 
 from __future__ import annotations
@@ -12,7 +13,7 @@ import base64
 import binascii
 import time
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, Header, HTTPException
 from pydantic import BaseModel
 
 from ..config import load_settings
@@ -45,6 +46,15 @@ def create_app(settings=None) -> FastAPI:
     stats = LatencyStats(deps.settings.serving.stats_window)
     api = FastAPI(title="Agentic RAG", version="0.1.0")
 
+    def _tenant(header_tenant: str | None, body_tenant: str) -> str:
+        # confused-deputy fix (08 threat 3): under auth the tenant comes from the header (a stand-in
+        # for the authenticated principal), never the client-controlled body.
+        if deps.settings.serving.require_auth:
+            if not header_tenant:
+                raise HTTPException(401, "X-Tenant-Id required (serving.require_auth is on)")
+            return header_tenant
+        return body_tenant
+
     @api.get("/health")
     async def health() -> dict:
         return {
@@ -59,11 +69,10 @@ def create_app(settings=None) -> FastAPI:
         return stats.snapshot()
 
     @api.post("/ingest", response_model=JobHandle)
-    async def ingest(req: IngestRequest) -> JobHandle:
+    async def ingest(req: IngestRequest, x_tenant_id: str | None = Header(default=None)) -> JobHandle:
+        tenant = _tenant(x_tenant_id, req.tenant_id)
         if req.text is not None:
-            doc = await ingestion.ingest_text(
-                req.text, tenant_id=req.tenant_id, filename=req.filename
-            )
+            doc = await ingestion.ingest_text(req.text, tenant_id=tenant, filename=req.filename)
             if doc.status != JobState.READY:
                 raise HTTPException(
                     422, f"ingest {doc.status.value}: {doc.error or 'see /docs status'}"
@@ -74,7 +83,7 @@ def create_app(settings=None) -> FastAPI:
                 data = base64.b64decode(req.content_base64, validate=True)
             except (binascii.Error, ValueError) as exc:
                 raise HTTPException(400, f"content_base64 is not valid base64: {exc}") from exc
-            return await ingestion.submit(data, tenant_id=req.tenant_id, filename=req.filename)
+            return await ingestion.submit(data, tenant_id=tenant, filename=req.filename)
         raise HTTPException(400, "provide either `text` or `content_base64`")
 
     @api.get("/docs/{tenant_id}/{doc_id}")
@@ -92,12 +101,13 @@ def create_app(settings=None) -> FastAPI:
         }
 
     @api.post("/ask", response_model=Answer)
-    async def ask(req: AskRequest) -> Answer:
-        if not limiter.allow(req.tenant_id):
+    async def ask(req: AskRequest, x_tenant_id: str | None = Header(default=None)) -> Answer:
+        tenant = _tenant(x_tenant_id, req.tenant_id)
+        if not limiter.allow(tenant):
             raise HTTPException(429, "per-tenant rate limit exceeded")
         t0 = time.monotonic()
         answer = await app_obj.answer(
-            req.query, req.history or None, tenant_id=req.tenant_id, session_id=req.session_id
+            req.query, req.history or None, tenant_id=tenant, session_id=req.session_id
         )
         stats.record(
             (time.monotonic() - t0) * 1000,

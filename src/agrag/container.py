@@ -151,10 +151,10 @@ def _parser(settings: Settings, vision_llm: LLM):
     return PymupdfParser(cfg=settings.parser, vision_llm=vision_llm)
 
 
-def _chunker(settings: Settings):
+def _chunker(settings: Settings, embedder=None):
     from .ingestion.chunker import build_chunker
 
-    return build_chunker(settings.chunker)
+    return build_chunker(settings.chunker, embedder=embedder)
 
 
 def _sandbox(settings: Settings):
@@ -180,12 +180,14 @@ def build_deps(settings: Settings | None = None) -> Deps:
 
     from .retrieval.hybrid import HybridRetriever
 
+    cache = _cache(settings)
     retriever = HybridRetriever(
         embedding=embedding,
         vectorstore=vectorstore,
         lexical=lexical,
         reranker=reranker,
         cfg=settings.retrieval,
+        cache=cache if settings.cache.answers_enabled else None,
     )
     return Deps(
         settings=settings,
@@ -198,10 +200,10 @@ def build_deps(settings: Settings | None = None) -> Deps:
         reranker=reranker,
         grader=_grader(settings, small_llm),
         verifier=_verifier(settings),
-        cache=_cache(settings),
+        cache=cache,
         tracer=_tracer(settings),
         parser=_parser(settings, llm),
-        chunker=_chunker(settings),
+        chunker=_chunker(settings, embedder=embedding),
         toolrunner=_sandbox(settings),
         retriever=retriever,
         sessions=_sessions(settings),

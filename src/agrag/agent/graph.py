@@ -29,7 +29,7 @@ from ..grounding.answer_builder import abstain, build_answer
 from ..grounding.generator import Generator
 from ..grounding.verify import GroundednessVerifier
 from .plan_exec import PlanExecutor
-from .schemas import RewriteResult
+from .schemas import PlanCritique, RewriteResult
 from .state import AgentState
 
 _REFORMULATE = {
@@ -41,6 +41,15 @@ _REFORMULATE = {
 _ENTITY = re.compile(r"\b([A-Z][a-zA-Z0-9]+(?:\s+[A-Z][a-zA-Z0-9]+)*)\b")
 _ENTITY_STOP = {"What", "Which", "How", "Who", "When", "Where", "Why", "Tell", "Compare",
                 "Summarize", "List", "The", "In", "On", "For", "FY"}
+
+
+_STOP = {"what", "which", "how", "who", "when", "where", "the", "a", "an", "of", "to", "in", "on",
+         "and", "or", "is", "are", "was", "were", "for", "with", "as", "at", "by", "from", "did",
+         "does", "about", "its", "their", "tell", "me", "compare", "vs"}
+
+
+def _content_tokens(text: str) -> set[str]:
+    return {w for w in re.findall(r"[a-z0-9]+", text.lower()) if w not in _STOP and len(w) > 1}
 
 
 def _entities(text: str) -> list[str]:
@@ -65,7 +74,15 @@ class AgentGraph:
     async def n_contextualize(self, state: AgentState) -> dict:
         history = state.get("history") or []
         if not history:
-            return {"standalone_q": state["query"], "carried_entities": _entities(state["query"])}
+            ents = _entities(state["query"])
+            # a dangling pronoun with no history and no in-query antecedent is unresolvable -> clarify
+            dangling = bool(re.search(r"\b(it|its|they|their|those|these)\b", state["query"], re.I)) and not ents
+            return {
+                "standalone_q": state["query"],
+                "carried_entities": ents,
+                "clarify": (f"Could you clarify what '{state['query'].strip()}' refers to?"
+                            if dangling else ""),
+            }
         last = next((t for t in reversed(history) if t.role == "assistant"), None)
         entities = last.carried_entities if last else []
         prompt = (
@@ -77,10 +94,22 @@ class AgentGraph:
                 prompt, RewriteResult, timeout_s=state["budget"].call_timeout_s()
             )
             state["budget"].charge(llm_result.total_tokens)
+        clarify = "" if rewrite.resolved else (
+            f"Could you clarify what '{state['query'].strip()}' refers to?"
+        )
         return {
             "standalone_q": rewrite.standalone_query or state["query"],
             "carried_entities": rewrite.carried_entities,
+            "clarify": clarify,
         }
+
+    async def n_clarify(self, state: AgentState) -> dict:
+        # unresolvable follow-up: ask ONE clarifying question instead of retrieving on a dangling
+        # reference (05 §8/§9). Terminal, tagged so eval separates it from a document-gap abstention.
+        self.deps.tracer.event("clarify", question=state["clarify"])
+        ans = abstain(state["trace_id"], "needs_clarification")
+        ans.answer_text = state["clarify"]
+        return {"answer": ans}
 
     async def n_classify(self, state: AgentState) -> dict:
         with self.deps.tracer.span("classify"):
@@ -140,8 +169,30 @@ class AgentGraph:
             )
             state["budget"].charge(llm_result.total_tokens)
         plan = self._sanitize_plan(plan, state["standalone_q"])
+        plan = await self._critique_plan(plan, state["budget"])
         self.deps.tracer.event("plan", steps=len(plan.sub_steps), merge=plan.merge)
         return {"plan": plan}
+
+    async def _critique_plan(self, plan: QueryPlan, budget) -> QueryPlan:
+        """Self-RAG plan critique (05 §6): a redundant step is far cheaper to drop here than after k
+        failed retrievals. Never drop a step another kept step depends on, and keep at least one."""
+        if len(plan.sub_steps) <= 1:
+            return plan
+        listing = "\n".join(f"{s.step_id}: tool={s.tool.value} q={s.query}" for s in plan.sub_steps)
+        try:
+            critique, meta = await self.deps.small_llm.generate_structured(
+                f"Review this retrieval plan for redundant steps:\n{listing}",
+                PlanCritique, timeout_s=budget.call_timeout_s())
+            budget.charge(meta.total_tokens)
+        except Exception:
+            return plan
+        drop = set(critique.redundant_step_ids)
+        needed = {d for s in plan.sub_steps if s.step_id not in drop for d in s.depends_on}
+        drop -= needed
+        kept = [s for s in plan.sub_steps if s.step_id not in drop] or plan.sub_steps
+        if len(kept) != len(plan.sub_steps):
+            self.deps.tracer.event("plan.critique", dropped=sorted(drop))
+        return plan.model_copy(update={"sub_steps": kept})
 
     def _sanitize_plan(self, plan: QueryPlan, fallback_q: str) -> QueryPlan:
         """Constrained decoding pins types, not ranges: clamp k, cap fan-out, drop unknown deps."""
@@ -249,8 +300,24 @@ class AgentGraph:
                 state["draft"].claims, state["evidence"], budget=state["budget"]
             )
         supported = sum(1 for c in claims if c.support == SupportLabel.SUPPORTED)
-        self.deps.tracer.event("verify", supported=supported, total=len(claims))
-        return {"claims": claims}
+        useful = self._useful(state["standalone_q"], claims, state.get("computations") or [])
+        self.deps.tracer.event("verify", supported=supported, total=len(claims), useful=useful)
+        return {"claims": claims, "useful": useful}
+
+    @staticmethod
+    def _useful(query: str, claims: list, computations: list) -> bool:
+        """Self-RAG usefulness (ISUSE, 06): a grounded draft that shares no content with the question
+        does not answer it. A computed result always counts as useful."""
+        if computations:
+            return True
+        q = _content_tokens(query)
+        if not q:
+            return True
+        ans = set()
+        for c in claims:
+            if c.support == SupportLabel.SUPPORTED:
+                ans |= _content_tokens(c.text)
+        return bool(q & ans)
 
     async def n_finalize(self, state: AgentState) -> dict:
         ans = build_answer(
@@ -271,6 +338,9 @@ class AgentGraph:
         self.deps.tracer.event("abstain", reason=reason)
         return {"answer": abstain(state["trace_id"], reason, gaps=state.get("gaps"))}
 
+    def route_contextualize(self, state: AgentState) -> str:
+        return "clarify" if state.get("clarify") else "classify"
+
     def route_classify(self, state: AgentState) -> str:
         r: Route = state["route"]
         return "respond" if (r.intent == Intent.CHITCHAT or r.history_answerable) else "plan"
@@ -285,7 +355,7 @@ class AgentGraph:
 
     def route_verify(self, state: AgentState) -> str:
         grounded = any(c.support == SupportLabel.SUPPORTED for c in (state.get("claims") or []))
-        if grounded:
+        if grounded and state.get("useful", True):
             return "finalize"
         return "reformulate" if self._budget_ok(state) else "abstain"
 
@@ -306,6 +376,7 @@ class AgentGraph:
     def _build(self):
         g = StateGraph(AgentState)
         g.add_node("contextualize", self.n_contextualize)
+        g.add_node("clarify", self.n_clarify)
         g.add_node("classify", self.n_classify)
         g.add_node("respond", self.n_respond)
         g.add_node("plan", self.n_plan)
@@ -318,7 +389,10 @@ class AgentGraph:
         g.add_node("abstain", self.n_abstain)
 
         g.set_entry_point("contextualize")
-        g.add_edge("contextualize", "classify")
+        g.add_conditional_edges(
+            "contextualize", self.route_contextualize, {"clarify": "clarify", "classify": "classify"}
+        )
+        g.add_edge("clarify", END)
         g.add_conditional_edges(
             "classify", self.route_classify, {"respond": "respond", "plan": "plan"}
         )

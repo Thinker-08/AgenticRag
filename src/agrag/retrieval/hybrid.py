@@ -7,10 +7,13 @@ candidate generator, never the final ranking (C4). Strategy selects which legs r
 from __future__ import annotations
 
 import asyncio
+import hashlib
+import json
 
 from ..config import RetrievalConfig
 from ..contracts import Budget, ScoredChunk, Strategy
-from ..interfaces import EmbeddingModel, LexicalIndex, Reranker, VectorStore
+from ..interfaces import Cache, EmbeddingModel, LexicalIndex, Reranker, VectorStore
+from ..reliability import CircuitBreaker
 from .dedupe import dedupe
 from .rrf import rrf_fuse
 
@@ -49,12 +52,23 @@ class HybridRetriever:
         lexical: LexicalIndex,
         reranker: Reranker,
         cfg: RetrievalConfig,
+        cache: Cache | None = None,
     ) -> None:
         self.embedding = embedding
         self.vectorstore = vectorstore
         self.lexical = lexical
         self.reranker = reranker
         self.cfg = cfg
+        self.cache = cache
+        # per-dependency breakers (07 §2.3): a degraded reranker must not sink the query path
+        self._dense_breaker = CircuitBreaker(failures=4, window_s=30, cooldown_s=15)
+        self._rerank_breaker = CircuitBreaker(failures=4, window_s=30, cooldown_s=15)
+
+    async def _cache_key(self, query: str, tenant_id: str, strategy: Strategy, k: int, filters: dict) -> str:
+        # index size is a cheap version token: any upsert/delete invalidates the cached ranking
+        version = await self.vectorstore.count(tenant_id)
+        payload = json.dumps([query, tenant_id, strategy.value, k, filters, version], sort_keys=True, default=str)
+        return "retr:" + hashlib.blake2b(payload.encode(), digest_size=12).hexdigest()
 
     async def retrieve(
         self,
@@ -66,6 +80,10 @@ class HybridRetriever:
         filters: dict | None = None,
         budget: Budget | None = None,
     ) -> list[ScoredChunk]:
+        if not tenant_id:                              # fail-closed: no query runs without a tenant scope (C31)
+            from ..security import SecurityError
+
+            raise SecurityError("retrieval attempted with empty tenant scope")
         if budget is not None and budget.exceeded():
             return []
         use_dense, use_bm25 = _LEGS.get(strategy, (True, True))
@@ -73,7 +91,16 @@ class HybridRetriever:
         if strategy == Strategy.TABLE:
             filters.setdefault("kind", "table")
 
+        key = None
+        if self.cache is not None:
+            key = await self._cache_key(query, tenant_id, strategy, k, filters)
+            hit = await self.cache.get(key)
+            if hit is not None:  # retrieval-results cache (07 §4): skip ANN+BM25+RRF+rerank
+                return [ScoredChunk.model_validate(sc) for sc in hit]
+
         over_fetch = self.cfg.over_fetch
+        if use_dense and not self._dense_breaker.allow():   # vector store unhealthy -> BM25-only
+            use_dense = False
         dense_task = self._dense(query, tenant_id, over_fetch, filters) if use_dense else _empty()
         bm25_task = (
             self.lexical.search(query, tenant_id=tenant_id, top_k=over_fetch, filters=filters)
@@ -91,17 +118,37 @@ class HybridRetriever:
             fused = dense_res or bm25_res
         deduped = dedupe(fused, threshold=self.cfg.dedupe_threshold)
         top_k = min(k, self.cfg.top_k) if k else self.cfg.top_k
-        reranked = await self.reranker.rerank(query, deduped, top_k=top_k, budget=budget)
+        reranked = await self._rerank(query, deduped, top_k, budget)
+        if key is not None and reranked:
+            await self.cache.set(key, [sc.model_dump(mode="json") for sc in reranked], ttl_s=300)
         return reranked
+
+    async def _rerank(self, query, deduped, top_k, budget) -> list[ScoredChunk]:
+        if not self._rerank_breaker.allow():           # reranker unhealthy -> fused order (C12/C14)
+            return deduped[:top_k]
+        try:
+            out = await self.reranker.rerank(query, deduped, top_k=top_k, budget=budget)
+            self._rerank_breaker.record_success()
+            return out
+        except Exception:
+            self._rerank_breaker.record_failure()
+            return deduped[:top_k]                     # degrade to first-stage RRF ranking
 
     async def _dense(
         self, query: str, tenant_id: str, top_k: int, filters: dict | None
     ) -> list[ScoredChunk]:
-        emb = await asyncio.to_thread(self.embedding.encode_queries, [query])
-        sparse = emb.sparse[0] if emb.sparse else None
-        results = await self.vectorstore.search(
-            emb.dense[0], tenant_id=tenant_id, top_k=top_k, query_sparse=sparse, filters=filters
-        )
+        try:
+            emb = await asyncio.to_thread(self.embedding.encode_queries, [query])
+            sparse = emb.sparse[0] if emb.sparse else None
+            results = await self.vectorstore.search(
+                emb.dense[0], tenant_id=tenant_id, top_k=top_k, query_sparse=sparse, filters=filters
+            )
+            self._dense_breaker.record_success()
+        except EmbeddingContractError:
+            raise                                       # a contract violation must fail loud, not trip the breaker
+        except Exception:
+            self._dense_breaker.record_failure()
+            return []
         for sc in results:
             c = sc.chunk
             if c.embedding_model and (

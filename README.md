@@ -239,11 +239,11 @@ These compose into a fixed **degradation ladder** (07 §2.5): full 12B agentic a
 
 Two untrusted surfaces — uploaded PDF text and model-generated tool code — are both treated as hostile ([`security/`](src/agrag/security/), [`tools/sandbox.py`](src/agrag/tools/sandbox.py)):
 
-- **Injection (C29):** chat-template control tokens are neutralized at ingest (`sanitize.py`), evidence is spotlighted behind a per-request nonce and delimited as data, tool names/citation IDs are grammar-constrained to an allowlist, and a post-hoc **output filter** (`output_filter.py`) fails the query *closed* to abstention if the answer leaks the nonce, a template token, or a system-prompt fingerprint.
+- **Injection (C29):** chat-template control tokens are neutralized at ingest (`sanitize.py`), evidence is spotlighted behind a per-request nonce, delimited as data, and **datamarked** (an invisible marker interleaved between words so a whole span reads as uniformly-quoted data — stripped before the exact-quote grounding check); tool names/citation IDs are grammar-constrained to an allowlist; and a post-hoc **output filter** (`output_filter.py`) fails the query *closed* to abstention if the answer leaks the nonce, a template token, or a system-prompt fingerprint.
 - **Sandbox (C30):** the arithmetic tool AST-validates (no imports/attributes/dunders) then runs in a network-denied, resource-capped subprocess (gVisor/Firecracker are the drop-in production isolation behind the same interface).
-- **Tenancy (C31):** every vector/lexical/doc/session/cache lookup is tenant-scoped; the mandatory filter is a security boundary, not an optimization.
-- **PII (`pii.py`):** email/SSN/phone/Luhn-card detection tags chunk metadata at ingest (tag-and-restrict).
-- **PDF-bomb:** upload-size + per-parse wall-clock caps quarantine oversized/slow inputs before they touch a worker.
+- **Tenancy (C31):** every vector/lexical/doc/session/cache lookup is tenant-scoped; the retriever **fails closed** (`SecurityError`) on an empty scope. When `serving.require_auth` is on, the tenant is taken from the `X-Tenant-Id` header (a stand-in for the authenticated principal), never the request body — the confused-deputy fix.
+- **PII (`pii.py`):** email/SSN/phone/Luhn-card detection tags chunk metadata at ingest (tag-and-restrict), and every trace/log attribute is scrubbed + truncated so raw document text and PII never enter telemetry.
+- **PDF-bomb:** upload-size, per-parse wall-clock, page-count, **decompression-ratio**, and **render-pixel** caps quarantine oversized/slow/inflating inputs before they exhaust a worker.
 
 ---
 
@@ -318,7 +318,9 @@ Three milestones, nine steps, each gated by a *Done-when* and the single metric 
 | 8 · Eval + tracing | M3 Scale + harden | Eval harness + delta, CI regression gate, OTel spans, `/stats` p50/p95/p99 + rates, ANN-recall + judge-κ tooling | 🟢 (real benchmark datasets pending; synthetic golden set today) |
 | 9 · Harden + scale | M3 Scale + harden | Layered injection defense + output filter, tenant isolation, GPU-slot backpressure + circuit breaker + retries, small→large cascade, answer cache + invalidation + single-flight, per-tenant rate limits, PDF-bomb caps, ANN-recall measurement | ✅ |
 
-**Only genuine gap:** step 7's one advanced retrieval differentiator (intentionally last — the roadmap picks it from the dominant eval-failure class) and swapping the synthetic golden set for the real benchmark suites (FinanceBench / TAT-QA / ConvFinQA / DocVQA). Everything else across all nine steps is implemented behind the swappable interfaces and exercised in local mode; full-mode *answer quality* (real Gemma + BGE + NLI + Qdrant) is the only thing that needs a GPU box to validate.
+A 14-agent audit (one per design page) put overall coverage at ~81% and confirmed the load-bearing spine is real, not scaffolded; the flagged gaps were then closed. What now works beyond the headline table: ingest-time typed-metadata extraction (fiscal_year/quarter/doc_type/currency) backing self-query, table subtotal checksums, cross-ref/footnote linking, equation/list atomic chunks, a semantic chunker; a retrieval-results cache + Qdrant full-precision rescore/oversampling + per-dependency circuit breakers; multi-hop dependency splicing, a Self-RAG plan critique, a clarifying-question terminal, a usefulness (ISUSE) check, contradiction surfacing, and a numeric-drift guard (a written number must match the sandbox result); datamarking, PII telemetry scrubbing, auth-derived tenancy with a fail-closed guard, and decompression/render-pixel bomb caps.
+
+**Remaining deferred (by design, not oversight):** step 7's one advanced retrieval differentiator — ColPali / GraphRAG / RAPTOR — is intentionally last (the roadmap picks it from the dominant eval-failure class); the synthetic golden set awaits the real benchmark suites (FinanceBench / TAT-QA / ConvFinQA / DocVQA); and full-mode *answer quality* (real Gemma + BGE + NLI + Qdrant) needs a GPU box to validate. Per project decision there is **no automated test suite** — verification is script-driven and the CI gate (`ruff` + `agrag eval --gate`).
 
 ---
 
@@ -355,8 +357,9 @@ AgenticRag/
     │   ├── cache/              #   memory | redis  session/   memory | redis (C16)
     │   ├── tracer/             #   logging | langfuse | otel
     │   └── parser/             #   text (local) | pymupdf  (+ mathdetect.py: equation blocks)
-    ├── ingestion/              # offline plane: service (idempotent job FSM), stages, chunker,
-    │   │                       #   hashing, jobs, crossref (footnote/§ linking)
+    ├── ingestion/              # offline plane: service (idempotent job FSM), stages, chunker
+    │   │                       #   (hierarchical/recursive/semantic), hashing+merkle, jobs,
+    │   │                       #   crossref (footnote/§ linking), metadata (typed filterable fields)
     ├── retrieval/              # hybrid.py (RRF→dedupe→rerank→reorder), rrf, dedupe, selfquery
     ├── agent/                  # graph.py (LangGraph FSM), app, plan_exec (fan-out + code + aggregate),
     │   │                       #   grader (CRAG), aggregate (map-reduce), answer_cache, schemas, state

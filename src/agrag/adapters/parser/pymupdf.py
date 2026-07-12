@@ -22,6 +22,7 @@ from .mathdetect import looks_like_equation
 
 _OCR_DPI = 200
 _VISION_DPI = 150
+_MAX_RENDER_PX = 40_000_000          # ~40 MP render ceiling (image-dimension bomb guard)
 _OCR_MIN_CHARS = 24
 _LANG_MIN_CHARS = 20
 _BOILERPLATE_MIN_PAGES = 3
@@ -76,6 +77,7 @@ class PymupdfParser:
             tables_by_page = await asyncio.to_thread(self._extract_tables, data, doc_id)
 
             pages: list[Page] = []
+            extracted_chars = 0
             for i in range(page_count):
                 page, png = await asyncio.to_thread(self._process_page, doc, i, doc_id)
                 if png is not None:
@@ -83,6 +85,13 @@ class PymupdfParser:
                 self._merge_tables(page, tables_by_page.get(i, []))
                 self._order_blocks(page)
                 pages.append(page)
+                # decompression-bomb guard (08 threat 5): abort if extracted content dwarfs input bytes
+                extracted_chars += sum(len(b.text) for b in page.blocks)
+                if len(data) and extracted_chars / len(data) > self._cfg.max_inflate_ratio:
+                    raise ValueError(
+                        f"decompressed/input ratio exceeds max_inflate_ratio="
+                        f"{self._cfg.max_inflate_ratio} (suspected inflate bomb)"
+                    )
 
             self._strip_boilerplate(pages)
             summary = self._doc_summary(pages, filename)
@@ -160,13 +169,23 @@ class PymupdfParser:
             lang=self._detect_lang(text),
         )
 
+    def _dpi_for(self, page, base_dpi: int) -> int:
+        # image-dimension guard (08 threat 5): scale DPI down so a giant page can't render a
+        # multi-gigapixel bitmap that OOMs the OCR/vision worker.
+        rect = page.rect
+        pts = max(1.0, float(rect.width)) * max(1.0, float(rect.height))
+        px = pts * (base_dpi / 72.0) ** 2
+        if px > _MAX_RENDER_PX:
+            return max(36, int(base_dpi * (_MAX_RENDER_PX / px) ** 0.5))
+        return base_dpi
+
     def _ocr_page(self, page) -> str:
-        pix = page.get_pixmap(dpi=_OCR_DPI, alpha=False)
+        pix = page.get_pixmap(dpi=self._dpi_for(page, _OCR_DPI), alpha=False)
         img = self._Image.frombytes("RGB", (pix.width, pix.height), pix.samples)
         return self._pytesseract.image_to_string(img) or ""
 
     def _render_png(self, page) -> bytes:
-        pix = page.get_pixmap(dpi=_VISION_DPI, alpha=False)
+        pix = page.get_pixmap(dpi=self._dpi_for(page, _VISION_DPI), alpha=False)
         return pix.tobytes("png")
 
     async def _vision_page(self, page: Page, png: bytes, i: int, doc_id: str) -> Page:

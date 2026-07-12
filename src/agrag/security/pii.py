@@ -43,3 +43,27 @@ def detect_pii(text: str) -> list[str]:
             found.add("credit_card")
             break
     return sorted(found)
+
+
+_MAX_ATTR = 200
+
+
+def scrub(text: str) -> str:
+    """Redact PII spans from a string bound for telemetry (08 threat 4: PII never enters traces/logs)."""
+    text = _EMAIL.sub("[email]", text)
+    text = _SSN.sub("[ssn]", text)
+    text = _PHONE.sub("[phone]", text)
+    text = _CARD.sub(lambda m: "[card]" if _luhn_ok(re.sub(r"[ -]", "", m.group())) else m.group(), text)
+    return text
+
+
+def scrub_attrs(attrs: dict) -> dict:
+    """Scrub + truncate span/log attributes so raw document text and PII never land in telemetry."""
+    out: dict = {}
+    for k, v in attrs.items():
+        if isinstance(v, str):
+            s = scrub(v)
+            out[k] = s if len(s) <= _MAX_ATTR else s[:_MAX_ATTR] + "…"
+        else:
+            out[k] = v
+    return out

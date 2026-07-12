@@ -77,10 +77,12 @@ class LangfuseTracer:
                 pass
 
     def event(self, name: str, **attrs) -> None:
+        from ...security.pii import scrub_attrs
+
         parent = _current.get()
         if self._client is None or parent is None:
             return
         try:
-            parent.event(name=name, metadata=attrs)
+            parent.event(name=name, metadata=scrub_attrs(attrs))
         except Exception as e:
             _log.debug("event failed: %s", e)

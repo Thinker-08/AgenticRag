@@ -33,3 +33,18 @@ def neutralize_template_tokens(text: str) -> str:
     for pat in _PATTERNS:
         text = pat.sub(lambda m: f"{m.group(0)[0]}{_ZW}{m.group(0)[1:]}", text)
     return text
+
+
+_MARK = "⁣"          # INVISIBLE SEPARATOR — rare, zero-width, survives copy
+_MARK_RE = re.compile(r"(\s+)")
+
+
+def datamark(text: str) -> str:
+    """Spotlighting layer 2 (08): interleave an invisible marker between words so a whole retrieved
+    span reads to the model as uniformly-quoted DATA. Marks are stripped before the citation
+    quote-check (see strip_datamarks), so exact-substring grounding is preserved."""
+    return _MARK_RE.sub(lambda m: m.group(1) + _MARK, text)
+
+
+def strip_datamarks(text: str) -> str:
+    return text.replace(_MARK, "")

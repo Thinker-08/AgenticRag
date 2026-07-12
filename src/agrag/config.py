@@ -126,6 +126,7 @@ class ServingConfig(BaseModel):
     host: str = "0.0.0.0"
     port: int = 8000
     default_tenant: str = "default"
+    require_auth: bool = False         # when true, tenant derives from X-Tenant-Id, never the body (08 threat 3)
     rate_limit_qpm: int = 0            # per-tenant queries/minute; 0 disables (08 threat 6)
     stats_window: int = 1000           # ring buffer size behind /stats percentiles
 

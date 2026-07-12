@@ -40,6 +40,9 @@ class LoggingTracer:
 
     @contextmanager
     def span(self, name: str, **attrs):
+        from ...security.pii import scrub_attrs
+
+        attrs = scrub_attrs(attrs)          # PII/raw-text never enters telemetry (08 threat 4)
         depth = _depth.set(_depth.get() + 1)
         t0 = time.monotonic()
         self._log.info("span.start", span=name, trace_id=_trace_id.get(), **attrs)
@@ -55,4 +58,6 @@ class LoggingTracer:
             _depth.reset(depth)
 
     def event(self, name: str, **attrs) -> None:
-        self._log.info(name, trace_id=_trace_id.get(), **attrs)
+        from ...security.pii import scrub_attrs
+
+        self._log.info(name, trace_id=_trace_id.get(), **scrub_attrs(attrs))

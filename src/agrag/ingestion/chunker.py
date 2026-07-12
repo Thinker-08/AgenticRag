@@ -79,6 +79,9 @@ class HierarchicalChunker:
         self.parent = parent_size
         self.overlap = overlap
 
+    def _split_prose(self, body: str) -> list[str]:
+        return _split_words(body, self.child, self.overlap)
+
     def split(self, doc: ParsedDoc) -> list[Chunk]:
         chunks: list[Chunk] = []
         n = 0
@@ -108,7 +111,7 @@ class HierarchicalChunker:
                 )
             )
             n += 1
-            for piece in _split_words(body, self.child, self.overlap):
+            for piece in self._split_prose(body):
                 cid = f"{doc.doc_id}:p{page}:c{n}"
                 chunks.append(
                     _mk_chunk(
@@ -191,9 +194,48 @@ class RecursiveChunker:
         return chunks
 
 
-def build_chunker(cfg: ChunkerConfig):
+class SemanticChunker(HierarchicalChunker):
+    """Cut prose at semantic breakpoints (embed sentences, split where adjacent similarity drops
+    below a percentile) instead of fixed word windows (03 §4). Atomic blocks + parent-child are
+    inherited from HierarchicalChunker; only the child-splitting of prose changes."""
+
+    name = "semantic"
+
+    def __init__(self, embedder, *, breakpoint_pctl: int = 90, child_size: int = 320,
+                 parent_size: int = 1500) -> None:
+        super().__init__(child_size=child_size, parent_size=parent_size, overlap=0)
+        self._embed = embedder
+        self._pctl = breakpoint_pctl
+
+    def _split_prose(self, body: str) -> list[str]:
+        import numpy as np
+
+        from ..promptfmt import sentences
+
+        sents = sentences(body)
+        if len(sents) <= 2:
+            return [body] if body.strip() else []
+        vecs = np.asarray(self._embed.encode_documents(sents).dense, dtype=np.float32)
+        norms = np.clip(np.linalg.norm(vecs, axis=1), 1e-8, None)
+        unit = vecs / norms[:, None]
+        sims = np.array([float(unit[i] @ unit[i + 1]) for i in range(len(sents) - 1)])
+        thresh = float(np.percentile(-sims, self._pctl)) if len(sims) else 0.0
+        segments, cur = [], [sents[0]]
+        for i in range(len(sims)):
+            if -sims[i] >= thresh and len(" ".join(cur)) > self.child:
+                segments.append(" ".join(cur))
+                cur = []
+            cur.append(sents[i + 1])
+        if cur:
+            segments.append(" ".join(cur))
+        return segments
+
+
+def build_chunker(cfg: ChunkerConfig, embedder=None):
     if cfg.provider == "recursive":
         return RecursiveChunker(size=512, overlap=77)
+    if cfg.provider == "semantic" and embedder is not None:
+        return SemanticChunker(embedder, child_size=cfg.child_size, parent_size=cfg.parent_size)
     return HierarchicalChunker(
         child_size=cfg.child_size, parent_size=cfg.parent_size, overlap=cfg.overlap
     )

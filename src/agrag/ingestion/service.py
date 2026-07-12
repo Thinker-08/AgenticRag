@@ -11,8 +11,9 @@ import structlog
 from ..contracts import TERMINAL_STATES, Document, Job, JobHandle, JobState, ParsedDoc
 from ..deps import Deps
 from .crossref import link_crossrefs
-from .hashing import sha256_bytes
+from .hashing import merkle_diff, sha256_bytes
 from .jobs import JobQueue
+from .metadata import enrich_metadata
 from .stages import contextualize, embed_and_index, tag_pii
 
 log = structlog.get_logger("agrag.ingestion")
@@ -154,8 +155,13 @@ class IngestionService:
 
                 with self.deps.tracer.span("chunk"):
                     link_crossrefs(parsed)
+                    page_hashes = self._page_hashes(parsed)
+                    await self._merkle_report(job.tenant_id, doc.filename, page_hashes)
                     chunks = self.deps.chunker.split(parsed)
+                    doc_text = "\n".join(b.text for p in parsed.pages for b in p.blocks)
+                    chunks = enrich_metadata(chunks, doc_text)   # typed filterable fields (04 §6)
                     chunks = tag_pii(chunks)
+                    doc = doc.model_copy(update={"page_hashes": page_hashes})
 
                 with self.deps.tracer.span("contextualize", n=len(chunks)):
                     doc = await self._set(doc, JobState.CONTEXTUALIZING)
@@ -190,6 +196,25 @@ class IngestionService:
                 state = JobState.QUARANTINED if _is_hostile(exc) else JobState.FAILED
                 await self._set(doc, state, error=f"{type(exc).__name__}: {exc}")
                 log.warning("ingest.failed", doc_id=job.doc_id, error=str(exc), state=state.value)
+
+    def _page_hashes(self, parsed: ParsedDoc) -> dict[int, str]:
+        from .hashing import content_hash
+
+        return {p.page_no: content_hash("\n".join(b.text for b in p.blocks)) for p in parsed.pages}
+
+    async def _merkle_report(self, tenant_id: str, filename: str, new_hashes: dict[int, str]) -> None:
+        """Merkle diff (C20): on a same-file re-upload, report which pages changed. Unchanged pages'
+        chunks are already skipped by the content-hash embed cache, so this makes re-index incremental."""
+        if not filename:
+            return
+        prior = next((d for d in await self.deps.docstore.list_docs(tenant_id)
+                      if d.filename == filename and d.status == JobState.READY and d.page_hashes), None)
+        if not prior:
+            return
+        changed = merkle_diff(prior.page_hashes, new_hashes)
+        reused = len(set(prior.page_hashes) & set(new_hashes)) - len(changed & set(prior.page_hashes))
+        self.deps.tracer.event("merkle.diff", changed_pages=sorted(changed),
+                               reused_pages=max(0, reused), total=len(new_hashes))
 
     async def _supersede_prior_versions(self, doc: Document) -> None:
         """Blue/green on re-upload of an edited doc (C17/C20): deindex prior READY versions of the
