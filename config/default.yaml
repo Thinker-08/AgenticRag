@@ -1,0 +1,57 @@
+# Default config. `mode: local` runs the whole system with dependency-light fallbacks
+# (deterministic LLM, hash embeddings, in-memory stores) so it is runnable without a GPU box.
+# Flip `mode: full` (or set AGRAG_MODE=full) to wire Ollama + Qdrant + Redis + BGE + NLI.
+mode: local
+agent_mode: agentic          # agentic | baseline
+data_dir: ./data
+
+llm:
+  provider: fake             # fake | ollama
+  model: gemma3:12b
+  small_model: gemma3:4b
+  host: http://localhost:11434
+
+embedding:
+  provider: hash             # hash | bge_m3
+  model: BAAI/bge-m3
+  version: "1.5"
+  dim: 1024
+
+vectorstore:
+  provider: memory           # memory | qdrant
+  collection: agrag_chunks
+  quantize: none
+
+reranker:
+  provider: identity         # identity | bge
+
+verifier:
+  provider: lexical          # lexical | nli
+  tau_entail: 0.85
+  tau_contra: 0.10
+
+cache:
+  provider: memory           # memory | redis
+
+tracer:
+  provider: logging          # logging | langfuse
+
+parser:
+  provider: text             # text (dependency-free) | pymupdf
+  text_ratio_threshold: 0.1
+
+chunker:
+  provider: hierarchical
+  child_size: 320
+  parent_size: 1500
+
+retrieval:
+  over_fetch: 100
+  rrf_k: 60
+  top_k: 8
+
+agent:
+  wall_clock_s: 30.0
+  token_budget: 20000
+  max_iters: 3
+  slot_concurrency: 4

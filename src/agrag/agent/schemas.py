@@ -1,0 +1,26 @@
+"""Small constrained-decoding schemas the FSM consumes (rewrite, code plan). All grammar-emitted (C3)."""
+
+from __future__ import annotations
+
+from pydantic import BaseModel, Field
+
+
+class RewriteResult(BaseModel):
+    """Follow-up resolution: elliptical/pronoun query -> standalone (05 §9)."""
+    standalone_query: str
+    carried_entities: list[str] = Field(default_factory=list)
+    resolved: bool = True
+
+
+class CodeInput(BaseModel):
+    name: str
+    value: float
+    source_chunk_id: str = ""
+    cell_ref: str = ""
+
+
+class CodePlan(BaseModel):
+    """The LLM sets up arithmetic symbolically over NAMED inputs; the sandbox executes it (06 §4)."""
+    inputs: list[CodeInput] = Field(default_factory=list)
+    code: str = ""
+    claim_template: str = ""

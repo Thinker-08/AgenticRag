@@ -1,0 +1,55 @@
+# Full self-hosted stack: Ollama + Qdrant + Redis + BGE-M3 + BGE-reranker + NLI verifier + Langfuse.
+# Requires `pip install -e '.[ml,pdf,stores,obs]'` and the docker-compose services running.
+mode: full
+agent_mode: agentic
+data_dir: ./data
+
+llm:
+  provider: ollama
+  model: gemma3:12b
+  small_model: gemma3:4b
+  host: http://localhost:11434
+
+embedding:
+  provider: bge_m3
+  model: BAAI/bge-m3
+  version: "1.5"
+  dim: 1024
+  device: cpu
+
+vectorstore:
+  provider: qdrant
+  host: http://localhost:6333
+  collection: agrag_chunks
+  quantize: int8
+
+reranker:
+  provider: bge
+  model: BAAI/bge-reranker-v2-m3
+  device: cpu
+
+verifier:
+  provider: nli
+  model: cross-encoder/nli-deberta-v3-base
+  tau_entail: 0.85
+  tau_contra: 0.10
+
+cache:
+  provider: redis
+  host: redis://localhost:6379/0
+
+tracer:
+  provider: langfuse
+  host: http://localhost:3000
+
+parser:
+  provider: pymupdf
+
+chunker:
+  provider: hierarchical
+
+agent:
+  wall_clock_s: 45.0
+  token_budget: 30000
+  max_iters: 3
+  slot_concurrency: 4

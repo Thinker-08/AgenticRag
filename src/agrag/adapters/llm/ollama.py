@@ -1,0 +1,98 @@
+"""Ollama LLM adapter (full mode): grammar-constrained structured output."""
+
+from __future__ import annotations
+
+import base64
+from typing import Any, Sequence, Type, TypeVar
+
+import httpx
+from pydantic import BaseModel, ValidationError
+
+from ...interfaces.types import LLMResult
+
+T = TypeVar("T", bound=BaseModel)
+
+
+class OllamaLLM:
+    """Generate / structured-generate against a local Ollama server."""
+
+    name: str
+
+    def __init__(self, model: str, host: str, default_max_tokens: int = 1024) -> None:
+        self.model = model
+        self.name = model
+        self.host = host.rstrip("/")
+        self.default_max_tokens = default_max_tokens
+        self._client = httpx.AsyncClient(base_url=self.host, timeout=httpx.Timeout(300.0))
+
+    def _payload(
+        self,
+        prompt: str,
+        system: str | None,
+        max_tokens: int,
+        temperature: float,
+        images: Sequence[bytes] | None,
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "model": self.model,
+            "prompt": prompt,
+            "stream": False,
+            "options": {"temperature": temperature, "num_predict": max_tokens},
+        }
+        if system is not None:
+            payload["system"] = system
+        if images:
+            payload["images"] = [base64.b64encode(img).decode("ascii") for img in images]
+        return payload
+
+    async def _post(self, payload: dict[str, Any], timeout_s: float | None) -> LLMResult:
+        kwargs: dict[str, Any] = {"timeout": timeout_s} if timeout_s is not None else {}
+        resp = await self._client.post("/api/generate", json=payload, **kwargs)
+        resp.raise_for_status()
+        data = resp.json()
+        return LLMResult(
+            text=data.get("response", ""),
+            prompt_tokens=data.get("prompt_eval_count", 0),
+            completion_tokens=data.get("eval_count", 0),
+            model=self.model,
+        )
+
+    async def generate(
+        self,
+        prompt: str,
+        *,
+        system: str | None = None,
+        max_tokens: int = 512,
+        temperature: float = 0.0,
+        images: Sequence[bytes] | None = None,
+        timeout_s: float | None = None,
+    ) -> LLMResult:
+        payload = self._payload(prompt, system, max_tokens, temperature, images)
+        return await self._post(payload, timeout_s)
+
+    async def generate_structured(
+        self,
+        prompt: str,
+        schema: Type[T],
+        *,
+        system: str | None = None,
+        max_tokens: int = 512,
+        temperature: float = 0.0,
+        images: Sequence[bytes] | None = None,
+        timeout_s: float | None = None,
+    ) -> tuple[T, LLMResult]:
+        fmt = schema.model_json_schema()
+        payload = self._payload(prompt, system, max_tokens, temperature, images)
+        payload["format"] = fmt
+        result = await self._post(payload, timeout_s)
+        try:
+            return schema.model_validate_json(result.text), result
+        except ValidationError as exc:
+            repair = (
+                f"{prompt}\n\nThe previous response failed schema validation:\n{exc}\n"
+                "Return ONLY valid JSON that conforms to the required schema."
+            )
+            payload = self._payload(repair, system, max_tokens, temperature, images)
+            payload["format"] = fmt
+            result = await self._post(payload, timeout_s)
+            return schema.model_validate_json(result.text), result

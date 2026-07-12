@@ -1,0 +1,65 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "agrag"
+version = "0.1.0"
+description = "Agentic, document-grounded RAG over arbitrary PDFs on a self-hosted open-weights stack"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+
+dependencies = [
+    "pydantic>=2.6",
+    "pyyaml>=6.0",
+    "structlog>=24.1",
+    "tenacity>=8.2",
+    "numpy>=1.26",
+    "httpx>=0.27",
+    "rank-bm25>=0.2.2",
+    "datasketch>=1.6",
+    "fastapi>=0.110",
+    "uvicorn>=0.29",
+    "langgraph>=0.2",
+]
+
+[project.optional-dependencies]
+ml = [
+    "FlagEmbedding>=1.2",
+    "sentence-transformers>=2.7",
+    "transformers>=4.40",
+    "torch>=2.2",
+]
+pdf = [
+    "PyMuPDF>=1.24",
+    "pdfplumber>=0.11",
+    "pytesseract>=0.3",
+    "ftfy>=6.2",
+    "lingua-language-detector>=2.0",
+]
+stores = [
+    "qdrant-client>=1.9",
+    "redis>=5.0",
+]
+obs = [
+    "opentelemetry-sdk>=1.24",
+    "langfuse>=2.30,<3",
+]
+eval = [
+    "ragas>=0.1",
+    "datasets>=2.19",
+]
+dev = [
+    "ruff>=0.4",
+]
+
+[project.scripts]
+agrag = "agrag.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
