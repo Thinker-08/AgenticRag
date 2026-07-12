@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from enum import Enum
 from typing import Optional
 
@@ -24,6 +25,22 @@ class ParseTier(str, Enum):
     DIGITAL = "digital"
     OCR = "ocr"
     VISION = "vision"
+
+
+_NUM_STRIP = re.compile(r"[$€£,\s]")
+
+
+def _cell_num(raw: str) -> float | None:
+    s = _NUM_STRIP.sub("", raw.strip())
+    if not s or s in ("-", "—"):
+        return None
+    neg = s.startswith("(") and s.endswith(")")
+    s = s.strip("()").rstrip("%")
+    try:
+        v = float(s)
+    except ValueError:
+        return None
+    return -v if neg else v
 
 
 class Table(BaseModel):
@@ -49,6 +66,40 @@ class Table(BaseModel):
             lines.append(" — ".join(cells) + ".")
         return "\n".join(lines)
 
+    def validate_checksum(self) -> bool:
+        """Arithmetic self-check (03 stage 2): when a Total row exists, each numeric column's data
+        rows must sum to it (±1.5% for report rounding). Percent columns are skipped — they don't
+        sum. No Total row (or nothing parseable) is vacuously ok; a mismatch flags the grid
+        low-confidence rather than rejecting it."""
+        rows = self.grid[self.n_header_rows :]
+        headers = self.grid[: self.n_header_rows]
+        total_idx = next(
+            (i for i in range(len(rows) - 1, -1, -1)
+             if rows[i] and rows[i][0].strip().lower().startswith(("total", "sum"))),
+            None,
+        )
+        if total_idx is None or total_idx == 0:
+            self.checksum_ok = True
+            return True
+        data, total_row = rows[:total_idx], rows[total_idx]
+        ok = True
+        for c in range(1, max(len(r) for r in self.grid)):
+            header_text = " ".join(h[c] for h in headers if c < len(h))
+            if "%" in header_text:
+                continue
+            cells = [_cell_num(r[c]) for r in data if c < len(r)]
+            values = [v for v in cells if v is not None]
+            if any(c < len(r) and r[c].strip().endswith("%") for r in data):
+                continue
+            total = _cell_num(total_row[c]) if c < len(total_row) else None
+            if total is None or len(values) < 2:
+                continue
+            if abs(sum(values) - total) > max(0.6, abs(total) * 0.015):
+                ok = False
+                break
+        self.checksum_ok = ok
+        return ok
+
 
 class Block(BaseModel):
     block_id: str
@@ -61,6 +112,7 @@ class Block(BaseModel):
     table: Optional[Table] = None
     image_ref: Optional[str] = None
     breadcrumb: list[str] = Field(default_factory=list)
+    links: list[str] = Field(default_factory=list)   # resolved cross-refs -> target block_ids
 
 
 class Page(BaseModel):

@@ -41,6 +41,7 @@ class BaselineRAG:
         history: list[Turn] | None = None,
         *,
         tenant_id: str = "default",
+        session_id: str | None = None,   # accepted for interface parity; the control is single-shot
         budget: Budget | None = None,
     ) -> Answer:
         trace_id = uuid.uuid4().hex[:12]

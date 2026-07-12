@@ -10,9 +10,10 @@ import structlog
 
 from ..contracts import TERMINAL_STATES, Document, Job, JobHandle, JobState, ParsedDoc
 from ..deps import Deps
+from .crossref import link_crossrefs
 from .hashing import sha256_bytes
 from .jobs import JobQueue
-from .stages import contextualize, embed_and_index
+from .stages import contextualize, embed_and_index, tag_pii
 
 log = structlog.get_logger("agrag.ingestion")
 
@@ -152,7 +153,9 @@ class IngestionService:
                     doc = await self._set(doc, JobState.CHUNKING, page_count=parsed.page_count)
 
                 with self.deps.tracer.span("chunk"):
+                    link_crossrefs(parsed)
                     chunks = self.deps.chunker.split(parsed)
+                    chunks = tag_pii(chunks)
 
                 with self.deps.tracer.span("contextualize", n=len(chunks)):
                     doc = await self._set(doc, JobState.CONTEXTUALIZING)

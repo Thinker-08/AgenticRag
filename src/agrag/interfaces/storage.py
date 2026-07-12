@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Awaitable, Callable, Protocol, Sequence, runtime_checkable
 
-from ..contracts import Chunk, Document, ScoredChunk
+from ..contracts import Chunk, Conversation, Document, ScoredChunk, Turn
 from .types import SparseVector, VectorRecord
 
 
@@ -57,6 +57,19 @@ class DocStore(Protocol):
     async def put_chunks(self, chunks: Sequence[Chunk]) -> None: ...
 
     async def get_chunk(self, tenant_id: str, chunk_id: str) -> Chunk | None: ...
+
+    async def list_chunks(self, tenant_id: str, *, limit: int | None = None) -> list[Chunk]:
+        """All retrievable (non-parent) chunks for a tenant — the full-scan source for aggregation."""
+        ...
+
+
+@runtime_checkable
+class SessionStore(Protocol):
+    """Externalized conversation history (C16) so any stateless replica resolves a follow-up."""
+
+    async def get(self, tenant_id: str, session_id: str) -> Conversation: ...
+
+    async def append(self, tenant_id: str, session_id: str, turn: Turn, *, max_turns: int = 20) -> None: ...
 
 
 @runtime_checkable

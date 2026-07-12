@@ -21,6 +21,10 @@ def _tracer(settings: Settings):
         from .adapters.tracer.langfuse import LangfuseTracer
 
         return LangfuseTracer(host=settings.tracer.host)
+    if settings.tracer.provider == "otel":
+        from .adapters.tracer.otel import OtelTracer
+
+        return OtelTracer(host=settings.tracer.host)
     raise ValueError(f"unknown tracer provider {settings.tracer.provider}")
 
 
@@ -33,7 +37,11 @@ def _llm(settings: Settings, model: str) -> LLM:
         from .adapters.llm.ollama import OllamaLLM
 
         return OllamaLLM(
-            model=model, host=settings.llm.host, default_max_tokens=settings.llm.max_tokens
+            model=model,
+            host=settings.llm.host,
+            default_max_tokens=settings.llm.max_tokens,
+            reliability=settings.reliability,
+            slots=settings.agent.slot_concurrency,
         )
     raise ValueError(f"unknown llm provider {settings.llm.provider}")
 
@@ -85,6 +93,16 @@ def _docstore(settings: Settings):
     from .adapters.docstore.memory import MemoryDocStore
 
     return MemoryDocStore()
+
+
+def _sessions(settings: Settings):
+    if settings.cache.provider == "redis":
+        from .adapters.session.redis import RedisSessionStore
+
+        return RedisSessionStore(host=settings.cache.host)
+    from .adapters.session.memory import MemorySessionStore
+
+    return MemorySessionStore()
 
 
 def _reranker(settings: Settings):
@@ -186,6 +204,7 @@ def build_deps(settings: Settings | None = None) -> Deps:
         chunker=_chunker(settings),
         toolrunner=_sandbox(settings),
         retriever=retriever,
+        sessions=_sessions(settings),
     )
 
 

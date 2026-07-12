@@ -54,13 +54,17 @@ class VerifierConfig(BaseModel):
     model: str = "cross-encoder/nli-deberta-v3-base"
     tau_entail: float = 0.85
     tau_contra: float = 0.10
+    judge_gray_zone: bool = True       # escalate tau_contra < p < tau_entail to the LLM judge (06 §3)
 
 
 class CacheConfig(BaseModel):
     provider: str = "memory"
     host: str = "redis://localhost:6379/0"
+    answers_enabled: bool = True       # exact + semantic answer cache on the query path (C18)
     answer_ttl_s: int = 3600
-    semantic_threshold: float = 0.97
+    semantic_enabled: bool = True
+    semantic_threshold: float = 0.97   # precision knob: too loose serves 2022's answer to a 2023 question
+    semantic_max_entries: int = 128
 
 
 class TracerConfig(BaseModel):
@@ -105,12 +109,25 @@ class AgentConfig(BaseModel):
     max_iters: int = 3
     grade_relevance_floor: float = 0.7
     slot_concurrency: int = 4
+    max_scan_chunks: int = 500         # aggregation full-scan bound; truncation is logged, never silent
+
+
+class ReliabilityConfig(BaseModel):
+    max_retries: int = 2               # retriable faults only (C11)
+    backoff_base_s: float = 0.2
+    backoff_cap_s: float = 2.0
+    breaker_failures: int = 5          # failures within window to trip Open (C12)
+    breaker_window_s: float = 30.0
+    breaker_cooldown_s: float = 15.0
+    slot_wait_fraction: float = 0.3    # max share of remaining deadline spent queueing for a slot (C8)
 
 
 class ServingConfig(BaseModel):
     host: str = "0.0.0.0"
     port: int = 8000
     default_tenant: str = "default"
+    rate_limit_qpm: int = 0            # per-tenant queries/minute; 0 disables (08 threat 6)
+    stats_window: int = 1000           # ring buffer size behind /stats percentiles
 
 
 class Settings(BaseModel):
@@ -130,6 +147,7 @@ class Settings(BaseModel):
     retrieval: RetrievalConfig = Field(default_factory=RetrievalConfig)
     sandbox: SandboxConfig = Field(default_factory=SandboxConfig)
     agent: AgentConfig = Field(default_factory=AgentConfig)
+    reliability: ReliabilityConfig = Field(default_factory=ReliabilityConfig)
     serving: ServingConfig = Field(default_factory=ServingConfig)
 
     def is_baseline(self) -> bool:

@@ -81,7 +81,51 @@ async def _eval(args) -> None:
         "agentic": result["agentic"].aggregate,
         "delta": result["delta"],
     }
+    if args.gate:
+        from .eval.gate import promote
+
+        control = _load_control(args.control) or result["baseline"].aggregate
+        try:
+            out["gate"] = promote("agentic", result["agentic"].aggregate, control)
+        except AssertionError as exc:
+            print(json.dumps(out, indent=2, default=str))
+            print(f"\nGATE FAILED: {exc}", file=sys.stderr)
+            raise SystemExit(1) from exc
     print(json.dumps(out, indent=2, default=str))
+
+
+def _load_control(path: str | None) -> dict | None:
+    if not path:
+        return None
+    p = Path(path)
+    return json.loads(p.read_text()) if p.exists() else None
+
+
+async def _calibrate(args) -> None:
+    """Sweep TAU_ENTAIL + report judge↔human κ from a labeled JSONL of
+    {entail_score, is_grounded, judge?, human?} rows (06 §6, 09, C28)."""
+    from .eval.calibration import cohens_kappa, sweep_tau
+
+    rows = [json.loads(ln) for ln in Path(args.labels).read_text().splitlines() if ln.strip()]
+    scored = [(float(r["entail_score"]), bool(r["is_grounded"])) for r in rows if "entail_score" in r]
+    best_tau, curve = sweep_tau(scored, beta=args.beta) if scored else (None, [])
+    out: dict = {"best_tau": best_tau, "curve": [c.__dict__ for c in curve]}
+    judged = [(bool(r["judge"]), bool(r["human"])) for r in rows if "judge" in r and "human" in r]
+    if judged:
+        out["cohens_kappa"] = round(cohens_kappa([j for j, _ in judged], [h for _, h in judged]), 4)
+        out["kappa_gate_ok"] = out["cohens_kappa"] >= args.kappa_min
+    print(json.dumps(out, indent=2))
+
+
+async def _recall(args) -> None:
+    from .eval.golden import load_corpus
+    from .eval.harness import EvalHarness
+    from .eval.recall import measure_ann_recall
+
+    settings = _settings(args)
+    harness = EvalHarness(settings, corpus=load_corpus(args.corpus))
+    await harness.ingest_corpus(harness.corpus, tenant_id=args.tenant)
+    print(json.dumps(await measure_ann_recall(harness.deps, tenant_id=args.tenant, k=args.k), indent=2))
 
 
 def _serve(args) -> None:
@@ -113,13 +157,27 @@ def main(argv=None) -> int:
     )
     eval_parser.add_argument("--golden", default="data/golden/sample.jsonl")
     eval_parser.add_argument("--corpus", default="data/golden/sample_corpus.jsonl")
+    eval_parser.add_argument("--gate", action="store_true", help="exit 1 if agentic regresses the control")
+    eval_parser.add_argument("--control", default=None,
+                             help="optional frozen-floors JSON; default gates vs the live baseline re-run (C27)")
+
+    cal_parser = sub.add_parser("calibrate", parents=[common], help="sweep TAU + judge kappa (C28)")
+    cal_parser.add_argument("--labels", required=True, help="JSONL of labeled entail/judge/human rows")
+    cal_parser.add_argument("--beta", type=float, default=0.5)
+    cal_parser.add_argument("--kappa-min", type=float, default=0.6)
+
+    recall_parser = sub.add_parser("recall", parents=[common], help="measure ANN recall@k (C1)")
+    recall_parser.add_argument("--corpus", default="data/golden/sample_corpus.jsonl")
+    recall_parser.add_argument("--k", type=int, default=10)
+
     sub.add_parser("serve", parents=[common], help="run the FastAPI server")
 
     args = parser.parse_args(argv)
     if args.cmd == "serve":
         _serve(args)
         return 0
-    runner = {"ingest": _ingest, "ask": _ask, "eval": _eval}[args.cmd]
+    runner = {"ingest": _ingest, "ask": _ask, "eval": _eval,
+              "calibrate": _calibrate, "recall": _recall}[args.cmd]
     asyncio.run(runner(args))
     return 0
 

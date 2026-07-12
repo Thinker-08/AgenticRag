@@ -1,0 +1,28 @@
+# CI regression gate (C27, design page 09/13): lint, test, and block merges that regress the
+# frozen control on the golden set. Runs entirely in local/fake mode — no GPU, no services.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install (local mode only — no ml/pdf/stores extras)
+        run: |
+          python -m pip install -U pip
+          pip install -e '.[dev]'
+      - name: Lint
+        run: ruff check src
+      - name: Eval regression gate (agentic must not regress the live baseline re-run)
+        env:
+          AGRAG_CONFIG: config/default.yaml
+        run: |
+          agrag eval --gate

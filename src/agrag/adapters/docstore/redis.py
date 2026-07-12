@@ -48,11 +48,22 @@ class RedisDocStore:
         pipe = self._redis.pipeline(transaction=False)
         for c in chunks:
             pipe.set(self._chunk_key(c.tenant_id, c.chunk_id), c.model_dump_json())
+            if not c.extra_metadata.get("is_parent"):
+                pipe.sadd(self._chunk_index_key(c.tenant_id), c.chunk_id)
         await pipe.execute()
 
     async def get_chunk(self, tenant_id: str, chunk_id: str) -> Chunk | None:
         raw = await self._redis.get(self._chunk_key(tenant_id, chunk_id))
         return Chunk.model_validate_json(raw) if raw else None
+
+    async def list_chunks(self, tenant_id: str, *, limit: int | None = None) -> list[Chunk]:
+        ids = sorted(await self._redis.smembers(self._chunk_index_key(tenant_id)))
+        if limit:
+            ids = ids[:limit]
+        if not ids:
+            return []
+        raws = await self._redis.mget([self._chunk_key(tenant_id, i) for i in ids])
+        return [Chunk.model_validate_json(r) for r in raws if r]
 
     @staticmethod
     def _index_key(tenant_id: str) -> str:
@@ -69,3 +80,7 @@ class RedisDocStore:
     @staticmethod
     def _chunk_key(tenant_id: str, chunk_id: str) -> str:
         return f"agrag:chunk:{tenant_id}:{chunk_id}"
+
+    @staticmethod
+    def _chunk_index_key(tenant_id: str) -> str:
+        return f"agrag:chunks:{tenant_id}"

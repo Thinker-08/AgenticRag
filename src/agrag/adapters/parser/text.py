@@ -10,6 +10,8 @@ import re
 import unicodedata
 
 from ...contracts import Block, BlockType, Page, ParsedDoc, ParseTier, Table
+from ...security.sanitize import neutralize_template_tokens
+from .mathdetect import looks_like_equation
 
 _TABLE_ROW = re.compile(r".+\|.+|.+\t.+|.+ {2,}.+")
 
@@ -17,7 +19,7 @@ _TABLE_ROW = re.compile(r".+\|.+|.+\t.+|.+ {2,}.+")
 def _clean(text: str) -> str:
     text = unicodedata.normalize("NFKC", text)
     text = re.sub(r"(\w)-\n(\w)", r"\1\2", text)
-    return text
+    return neutralize_template_tokens(text)   # after NFKC so homoglyphs can't reassemble a token
 
 
 def _split_row(line: str) -> list[str]:
@@ -40,9 +42,20 @@ def _is_table(block_lines: list[str]) -> bool:
     return sep >= max(2, len(block_lines) - 1)
 
 
+_BULLET = re.compile(r"^\s*(?:[-*•]|\(?\d{1,3}[.)])\s+\S")
+
+
+def _is_list(block_lines: list[str]) -> bool:
+    if len(block_lines) < 2:
+        return False
+    hits = sum(1 for ln in block_lines if _BULLET.match(ln))
+    return hits >= max(2, len(block_lines) - 1)
+
+
 def _is_title(line: str) -> bool:
     s = line.strip()
-    if not (0 < len(s) <= 64) or any(ch.isdigit() for ch in s) or ":" in s:
+    # a heading has no digits, colon, or math operators (those signal data / an equation)
+    if not (0 < len(s) <= 64) or any(ch.isdigit() for ch in s) or ":" in s or "=" in s:
         return False
     return not s.endswith((".", ",", ";")) and not re.search(r"[.!?]\s", s)
 
@@ -80,6 +93,7 @@ class TextParser:
                         n_header_rows=1,
                         grid=grid,
                     )
+                    tbl.validate_checksum()
                     blocks.append(
                         Block(
                             block_id=tbl.block_id,
@@ -88,6 +102,18 @@ class TextParser:
                             text=tbl.linearize(),
                             reading_order=order,
                             table=tbl,
+                            breadcrumb=list(breadcrumb),
+                        )
+                    )
+                    order += 1
+                elif _is_list(lines):
+                    blocks.append(
+                        Block(
+                            block_id=f"{doc_id}:p{pno}:b{order}",
+                            page=pno,
+                            type=BlockType.LIST,
+                            text="\n".join(ln.strip() for ln in lines),  # preserve line structure
+                            reading_order=order,
                             breadcrumb=list(breadcrumb),
                         )
                     )
@@ -109,11 +135,12 @@ class TextParser:
                     order += 1
                 else:
                     body = " ".join(ln.strip() for ln in lines)
+                    btype = BlockType.EQUATION if looks_like_equation(body) else BlockType.PARAGRAPH
                     blocks.append(
                         Block(
                             block_id=f"{doc_id}:p{pno}:b{order}",
                             page=pno,
-                            type=BlockType.PARAGRAPH,
+                            type=btype,
                             text=body,
                             reading_order=order,
                             breadcrumb=list(breadcrumb),

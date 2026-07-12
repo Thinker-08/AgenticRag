@@ -1,22 +1,26 @@
 """Stateless FastAPI serving plane (02 §2): ingest submit + query, every request trace-id'd.
 
 State lives in backing stores, so any replica serves any request identically. The app + ingestion
-share one Deps bundle (one shared index) — the seam between the two planes.
+share one Deps bundle (one shared index) — the seam between the two planes. Per-tenant rate limiting
+(08 threat 6) and latency percentiles (09) live here; tenant_id is a placeholder for an auth-derived
+principal (production must NOT trust it from the body — see 08 threat 3).
 """
 
 from __future__ import annotations
 
 import base64
 import binascii
+import time
 
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
 from ..config import load_settings
 from ..container import build_deps
-from ..contracts import Answer, JobHandle, JobState, Turn
+from ..contracts import Answer, AnswerStatus, JobHandle, JobState, Turn
 from ..deps import Deps
 from ..ingestion.service import IngestionService
+from .ops import LatencyStats, RateLimiter
 
 
 class IngestRequest(BaseModel):
@@ -30,12 +34,15 @@ class AskRequest(BaseModel):
     tenant_id: str = "default"
     query: str
     history: list[Turn] = []
+    session_id: str | None = None
 
 
 def create_app(settings=None) -> FastAPI:
     deps: Deps = build_deps(settings or load_settings())
     ingestion = IngestionService(deps)
     app_obj = _build_query_app(deps)
+    limiter = RateLimiter(deps.settings.serving.rate_limit_qpm)
+    stats = LatencyStats(deps.settings.serving.stats_window)
     api = FastAPI(title="Agentic RAG", version="0.1.0")
 
     @api.get("/health")
@@ -46,6 +53,10 @@ def create_app(settings=None) -> FastAPI:
             "agent_mode": deps.settings.agent_mode,
             "chunks": await deps.vectorstore.count(),
         }
+
+    @api.get("/stats")
+    async def get_stats() -> dict:
+        return stats.snapshot()
 
     @api.post("/ingest", response_model=JobHandle)
     async def ingest(req: IngestRequest) -> JobHandle:
@@ -82,7 +93,19 @@ def create_app(settings=None) -> FastAPI:
 
     @api.post("/ask", response_model=Answer)
     async def ask(req: AskRequest) -> Answer:
-        return await app_obj.answer(req.query, req.history, tenant_id=req.tenant_id)
+        if not limiter.allow(req.tenant_id):
+            raise HTTPException(429, "per-tenant rate limit exceeded")
+        t0 = time.monotonic()
+        answer = await app_obj.answer(
+            req.query, req.history or None, tenant_id=req.tenant_id, session_id=req.session_id
+        )
+        stats.record(
+            (time.monotonic() - t0) * 1000,
+            abstained=answer.status == AnswerStatus.ABSTAINED,
+            cached=answer.from_cache,
+            degraded=answer.degraded,
+        )
+        return answer
 
     return api
 

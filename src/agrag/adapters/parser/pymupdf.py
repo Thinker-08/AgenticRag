@@ -17,6 +17,8 @@ from collections import defaultdict
 from ...config import ParserConfig
 from ...contracts import Block, BlockType, Page, ParsedDoc, ParseTier, Table
 from ...interfaces import LLM
+from ...security.sanitize import neutralize_template_tokens
+from .mathdetect import looks_like_equation
 
 _OCR_DPI = 200
 _VISION_DPI = 150
@@ -131,11 +133,12 @@ class PymupdfParser:
             clean = self._clean(b[4])
             if not clean.strip():
                 continue
+            btype = BlockType.EQUATION if looks_like_equation(clean) else BlockType.PARAGRAPH
             blocks.append(
                 Block(
                     block_id=f"{doc_id}:p{i + 1}:b{order}",
                     page=i + 1,
-                    type=BlockType.PARAGRAPH,
+                    type=btype,
                     bbox=(float(b[0]), float(b[1]), float(b[2]), float(b[3])),
                     text=clean,
                     reading_order=order,
@@ -192,15 +195,15 @@ class PymupdfParser:
                         if not grid:
                             continue
                         bbox = tuple(float(v) for v in found.bbox)
-                        tables.append(
-                            Table(
-                                block_id=f"{doc_id}:p{i + 1}:tbl{j}",
-                                page=i + 1,
-                                bbox=bbox,
-                                grid=grid,
-                                n_header_rows=1,
-                            )
+                        tbl = Table(
+                            block_id=f"{doc_id}:p{i + 1}:tbl{j}",
+                            page=i + 1,
+                            bbox=bbox,
+                            grid=grid,
+                            n_header_rows=1,
                         )
+                        tbl.validate_checksum()
+                        tables.append(tbl)
                     if tables:
                         out[i] = tables
         except Exception:
@@ -267,7 +270,7 @@ class PymupdfParser:
             text = self._ftfy.fix_text(text)
         text = unicodedata.normalize("NFKC", text)
         text = re.sub(r"(\w)-\n(\w)", r"\1\2", text)
-        return text
+        return neutralize_template_tokens(text)
 
     def _detect_lang(self, text: str) -> str:
         if self._lingua is None or len(text.strip()) < _LANG_MIN_CHARS:

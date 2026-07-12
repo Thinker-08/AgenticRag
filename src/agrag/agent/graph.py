@@ -7,6 +7,7 @@ Two corrective cycles share one budget: Grade→Reformulate→Retrieve (CRAG) an
 
 from __future__ import annotations
 
+import re
 import uuid
 
 from langgraph.graph import END, StateGraph
@@ -14,6 +15,7 @@ from langgraph.graph import END, StateGraph
 from ..contracts import (
     Answer,
     AnswerStatus,
+    Grade,
     GradeVerdict,
     Intent,
     QueryPlan,
@@ -36,6 +38,21 @@ _REFORMULATE = {
     Strategy.BM25: Strategy.HYBRID,
 }
 
+_ENTITY = re.compile(r"\b([A-Z][a-zA-Z0-9]+(?:\s+[A-Z][a-zA-Z0-9]+)*)\b")
+_ENTITY_STOP = {"What", "Which", "How", "Who", "When", "Where", "Why", "Tell", "Compare",
+                "Summarize", "List", "The", "In", "On", "For", "FY"}
+
+
+def _entities(text: str) -> list[str]:
+    """Naive proper-noun spans for session carry-over; a real NER slots in behind the same shape."""
+    out: list[str] = []
+    for m in _ENTITY.finditer(text):
+        cleaned = " ".join(w for w in m.group(1).split() if w not in _ENTITY_STOP)
+        if cleaned and not cleaned.isdigit():
+            out.append(cleaned)
+    seen: set[str] = set()
+    return [e for e in out if not (e.lower() in seen or seen.add(e.lower()))][:6]
+
 
 class AgentGraph:
     def __init__(self, deps: Deps) -> None:
@@ -48,7 +65,7 @@ class AgentGraph:
     async def n_contextualize(self, state: AgentState) -> dict:
         history = state.get("history") or []
         if not history:
-            return {"standalone_q": state["query"], "carried_entities": []}
+            return {"standalone_q": state["query"], "carried_entities": _entities(state["query"])}
         last = next((t for t in reversed(history) if t.role == "assistant"), None)
         entities = last.carried_entities if last else []
         prompt = (
@@ -161,6 +178,14 @@ class AgentGraph:
         return {"evidence": evidence, "computations": comps or prior, "gaps": gaps}
 
     async def n_grade(self, state: AgentState) -> dict:
+        # A computed result (aggregation count / comparison arithmetic) IS the answer — its
+        # source chunks (bare list items) need not lexically overlap the query, so the code tool
+        # succeeding short-circuits the relevance grade (05 §8).
+        comps = state.get("computations") or []
+        if state["evidence"].scored and any(c.result is not None for c in comps):
+            grade = Grade(verdict=GradeVerdict.SUFFICIENT, max_relevance=1.0, rationale="tool result")
+            self.deps.tracer.event("grade", verdict=grade.verdict, relevance=1.0, via="tool")
+            return {"grade": grade}
         step = SubStep(step_id="grade", tool=Strategy.HYBRID, query=state["standalone_q"])
         with self.deps.tracer.span("grade"):
             grade = await self.deps.grader.grade(
@@ -172,18 +197,39 @@ class AgentGraph:
     async def n_reformulate(self, state: AgentState) -> dict:
         state["budget"].consume_iter()
         grade = state.get("grade")
+        verdict = grade.verdict if grade else GradeVerdict.AMBIGUOUS
         missing_keyword = grade.missing_slots[0] if grade and grade.missing_slots else ""
+        # CRAG reformulation ladder (05 §5): AMBIGUOUS -> targeted keyword rewrite; IRRELEVANT ->
+        # switch strategy (dense->HyDE, then hybrid->BM25). Reformulate MUST change something each
+        # iteration, or an identical re-run burns a budgeted iteration for no new evidence.
+        hyde = ""
+        if verdict == GradeVerdict.IRRELEVANT:
+            hyde = await self._hyde(state["standalone_q"], state["budget"])
         new_steps = []
         for st in state["plan"].sub_steps:
             tool = _REFORMULATE.get(st.tool, st.tool)
-            q = st.query + (
-                f" {missing_keyword}"
-                if missing_keyword and missing_keyword not in st.query.lower()
-                else ""
-            )
+            q = st.query
+            if missing_keyword and missing_keyword not in q.lower():
+                q = f"{q} {missing_keyword}"
+            if hyde:
+                q = f"{q} {hyde}"
             new_steps.append(st.model_copy(update={"tool": tool, "query": q}))
-        self.deps.tracer.event("reformulate", iters_left=state["budget"].iters_left)
+        self.deps.tracer.event(
+            "reformulate", iters_left=state["budget"].iters_left, verdict=verdict, hyde=bool(hyde))
         return {"plan": state["plan"].model_copy(update={"sub_steps": new_steps})}
+
+    async def _hyde(self, query: str, budget) -> str:
+        """HyDE: draft a hypothetical answer and retrieve against it (04 §4). The hypothetical is
+        used ONLY as a retrieval probe — never surfaced or cited — so a wrong guess can't leak in."""
+        prompt = (f"<query>{query}</query>\nWrite a one-sentence hypothetical answer to this "
+                  "question as it might appear in a document. Output only that sentence.")
+        try:
+            res = await self.deps.small_llm.generate(
+                prompt, max_tokens=80, timeout_s=budget.call_timeout_s())
+            budget.charge(res.total_tokens)
+            return res.text.strip()[:200]
+        except Exception:
+            return ""
 
     async def n_generate(self, state: AgentState) -> dict:
         with self.deps.tracer.span("generate"):
@@ -215,6 +261,9 @@ class AgentGraph:
             computations=state.get("computations"),
             gaps=state.get("gaps"),
         )
+        draft = state.get("draft")
+        if draft is not None and draft.degraded:
+            ans.degraded = True                       # surface the fallback tier to the client (C14)
         return {"answer": ans}
 
     async def n_abstain(self, state: AgentState) -> dict:

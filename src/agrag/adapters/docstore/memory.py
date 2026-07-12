@@ -32,3 +32,8 @@ class MemoryDocStore:
 
     async def get_chunk(self, tenant_id: str, chunk_id: str) -> Chunk | None:
         return self._chunks.get((tenant_id, chunk_id))
+
+    async def list_chunks(self, tenant_id: str, *, limit: int | None = None) -> list[Chunk]:
+        out = [c for (t, _), c in self._chunks.items()
+               if t == tenant_id and not c.extra_metadata.get("is_parent")]
+        return out[:limit] if limit else out

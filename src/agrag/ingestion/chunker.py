@@ -30,9 +30,16 @@ def _mk_chunk(
     parent_id: str | None,
     is_parent: bool,
     breadcrumb: list[str],
+    links: list[str] | None = None,
 ) -> Chunk:
     crumb = (" › ".join(breadcrumb) + "\n") if breadcrumb else ""
     linearized = crumb + text
+    meta = {**doc.extra_metadata, "is_parent": is_parent}
+    all_links = sorted(set((links or []) + (block.links if block else [])))
+    if all_links:
+        meta["links"] = all_links
+    if block and block.table and not block.table.checksum_ok:
+        meta["low_confidence_table"] = True         # subtotal reconciliation failed (03 stage 2)
     return Chunk(
         chunk_id=cid,
         doc_id=doc.doc_id,
@@ -48,7 +55,7 @@ def _mk_chunk(
         linked_block=block.block_id if block and block.table else None,
         content_hash=content_hash(text),
         lang=block.lang if block else "en",
-        extra_metadata={**doc.extra_metadata, "is_parent": is_parent},
+        extra_metadata=meta,
     )
 
 
@@ -84,6 +91,7 @@ class HierarchicalChunker:
                 return
             page = section[0].page
             body = "\n".join(b.text for b in section)
+            section_links = sorted({link for b in section for link in b.links})
             parent_id = f"{doc.doc_id}:p{page}:parent{n}"
             chunks.append(
                 _mk_chunk(
@@ -96,6 +104,7 @@ class HierarchicalChunker:
                     parent_id=None,
                     is_parent=True,
                     breadcrumb=list(crumb),
+                    links=section_links,
                 )
             )
             n += 1
@@ -112,6 +121,7 @@ class HierarchicalChunker:
                         parent_id=parent_id,
                         is_parent=False,
                         breadcrumb=list(crumb),
+                        links=section_links,
                     )
                 )
                 n += 1

@@ -46,6 +46,9 @@ class PlanExecutor:
     async def run(
         self, plan: QueryPlan, *, tenant_id: str, budget: Budget
     ) -> tuple[Evidence, list[Computation], list[str]]:
+        if plan.merge == "aggregate":
+            return await self._aggregate(plan, tenant_id=tenant_id, budget=budget)
+
         results: dict[str, list[ScoredChunk]] = {}
         computations: list[Computation] = []
         gaps: list[str] = []
@@ -87,6 +90,19 @@ class PlanExecutor:
 
         merged = await self._merge(results, tenant_id)
         return merged, computations, gaps
+
+    async def _aggregate(
+        self, plan: QueryPlan, *, tenant_id: str, budget: Budget
+    ) -> tuple[Evidence, list[Computation], list[str]]:
+        from .aggregate import MapReduceAggregator
+
+        step = plan.sub_steps[0]
+        evidence, comp = await MapReduceAggregator(self.deps).aggregate(
+            step, tenant_id=tenant_id, budget=budget)
+        gaps = list(evidence.gaps)
+        if not evidence.scored:
+            gaps.append(step.query)
+        return evidence, ([comp] if comp else []), gaps
 
     async def _merge(self, results: dict[str, list[ScoredChunk]], tenant_id: str) -> Evidence:
         pool: dict[str, ScoredChunk] = {}

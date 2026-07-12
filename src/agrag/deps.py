@@ -20,6 +20,7 @@ from .interfaces import (
     Parser,
     Reranker,
     Retriever,
+    SessionStore,
     ToolRunner,
     Tracer,
     VectorStore,
@@ -45,3 +46,4 @@ class Deps:
     chunker: Chunker
     toolrunner: ToolRunner
     retriever: Retriever
+    sessions: SessionStore

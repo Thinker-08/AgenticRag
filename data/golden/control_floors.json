@@ -1,0 +1,7 @@
+{
+  "_comment": "Frozen Milestone-1 control floors (C27). The CI gate (`agrag eval --gate`) fails a merge if the agentic run regresses any of these beyond tolerance. Local/fake-stack values; re-freeze against the real stack when full mode runs.",
+  "faithfulness": 1.0,
+  "citation_accuracy": 1.0,
+  "correct_refusal": 0.0,
+  "over_abstention": 0.0
+}

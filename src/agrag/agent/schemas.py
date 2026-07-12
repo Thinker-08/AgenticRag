@@ -26,3 +26,9 @@ class CodePlan(BaseModel):
     inputs: list[CodeInput] = Field(default_factory=list)
     code: str = ""
     claim_template: str = ""
+
+
+class ExtractedItems(BaseModel):
+    """Map step of aggregation map-reduce (05 §8): items in one chunk matching the query."""
+
+    items: list[str] = Field(default_factory=list)

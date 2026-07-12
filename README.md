@@ -74,6 +74,55 @@ stateDiagram-v2
 
 The inner cycle `Grade → Reformulate → Retrieve` is Corrective-RAG (fix *retrieval* before generating); the outer cycle `Verify → Reformulate → Retrieve` is Self-RAG (fix a *draft* that turned out ungrounded). Both decrement the same iteration counter and share one `Budget`.
 
+### End-to-end pipeline flow
+
+The full path a byte takes from upload to a cited answer, across both planes and every hardening layer.
+
+```mermaid
+flowchart TB
+    subgraph INGEST["① Offline ingestion — idempotent, content-hash-keyed job (C10/C15)"]
+        direction TB
+        UP["Upload bytes"] --> SZ{"size ≤ max_upload_mb?<br>parse ≤ timeout?"}
+        SZ -->|no| QN["QUARANTINED"]
+        SZ -->|yes| HASH["content_hash → dedupe<br>(no-op if READY)"]
+        HASH --> PARSE["Parse cascade: digital → OCR → vision<br>tables (pdfplumber + subtotal checksum)<br>reading-order, boilerplate strip, NFKC/ftfy"]
+        PARSE --> SAN["Neutralize chat-template tokens (C29)"]
+        SAN --> XREF["Link footnotes / Fig / § cross-refs"]
+        XREF --> CHUNK["Hierarchical parent-child chunk<br>tables·lists·equations atomic + breadcrumb"]
+        CHUNK --> PII["Detect + tag PII (C31)"]
+        PII --> CTX["Contextualize blurb (small LLM, cached)"]
+        CTX --> EMB["Embed dense+sparse (reuse by content_hash, C20)"]
+        EMB --> IDXW["Upsert → vector + BM25 + doc store"]
+        IDXW --> SUP["Supersede prior version of same file (C17/C20)"]
+    end
+
+    subgraph INDEX["② Shared hybrid index (tenant-scoped, C31)"]
+        VEC[("dense ANN")]; BM[("BM25")]; DS[("chunk + doc + PII meta")]
+    end
+    IDXW --> VEC & BM & DS
+
+    subgraph SERVE["③ Online serving — stateless, rate-limited, budgeted (C8/C13)"]
+        direction TB
+        ASK["POST /ask (tenant, session_id)"] --> RL{"per-tenant<br>rate limit?"}
+        RL -->|over| R429["429"]
+        RL -->|ok| CACHE{"answer cache?<br>exact → semantic (number guard)"}
+        CACHE -->|hit| OUT
+        CACHE -->|miss, single-flight| FSM["Agent FSM (see state diagram)"]
+        FSM --> RETR["Retrieve: embed → dense ⊕ BM25 → RRF<br>→ MinHash dedupe → cross-encoder rerank<br>→ lost-in-the-middle reorder → parent expand"]
+        RETR --> INDEX
+        FSM --> TOOL["Sandboxed code tool (arithmetic)<br>map-reduce full-scan (aggregation)"]
+        FSM --> GEN["Generate cited draft<br>(tier-1 small-model fallback on breaker/backpressure)"]
+        GEN --> VER["Verify: structural → lexical quote → NLI<br>gray-zone → LLM judge; else abstain"]
+        VER --> OFILT["Output filter: nonce / template / prompt-leak<br>→ fail-closed abstain (C29)"]
+        OFILT --> OUT["Answer: answered · partial · abstained<br>+ claims·citations·computations·flags"]
+        OUT --> SESS["Persist turns to session store (C16)"]
+    end
+
+    OTEL["trace_id + span/node · /stats p50·p95·p99 (C25/C26)"] -.-> SERVE
+```
+
+Every model call in ③ is guarded by a circuit breaker, deadline-gated retries with jitter, and a GPU-slot semaphore that sheds to backpressure — degrading down a fixed ladder (12B → small model → cache → honest abstention) rather than failing hard.
+
 ---
 
 ## Quickstart — local mode (no GPU, no services)
@@ -146,9 +195,10 @@ Optional dependencies map to extras: `pdf` (PyMuPDF/pdfplumber/OCR), `ml` (torch
 | Method | Path | Purpose |
 |---|---|---|
 | `GET` | `/health` | Liveness + current mode/agent-mode + indexed chunk count |
+| `GET` | `/stats` | Rolling p50/p95/p99 latency, abstention/cache-hit/degraded rates (C26) |
 | `POST` | `/ingest` | Ingest a document: `{"text": "..."}` inline, or `{"content_base64": "..."}` for binary (PDF); returns a `JobHandle` |
 | `GET` | `/docs/{tenant_id}/{doc_id}` | Ingestion status + page progress for an async job |
-| `POST` | `/ask` | Ask a question: `{"query": "...", "history": [...], "tenant_id": "..."}`; returns a structured `Answer` with claims + citations |
+| `POST` | `/ask` | Ask a question: `{"query": "...", "session_id": "...", "history": [...], "tenant_id": "..."}`; returns a structured `Answer`. Pass `session_id` for server-side multi-turn (history is loaded/persisted server-side); rate-limited per tenant (429 on breach). |
 
 ```bash
 curl -s localhost:8000/ingest -H 'content-type: application/json' \
@@ -158,18 +208,42 @@ curl -s localhost:8000/ask -H 'content-type: application/json' \
   -d '{"query": "What was Acme'\''s FY2023 revenue?"}'
 ```
 
-An `Answer` is either `answered` — with per-claim citations (`chunk_id`, page, verbatim quote) and any sandbox `computations` — or `abstained` with a machine-readable reason (`no_evidence`, `contradicted`, `budget_abstain`, `still_indexing`).
+An `Answer` is either `answered`/`partial` — with per-claim citations (`chunk_id`, page, verbatim quote) and any sandbox `computations` — or `abstained` with a machine-readable reason (`no_evidence`, `contradicted`, `budget_abstain`, `still_indexing`, `injection_suspected`). It also carries `from_cache` and `degraded` (served by the small-model fallback tier) flags.
 
 ---
 
 ## CLI
 
 ```
-agrag ingest <path> [--tenant T] [--config cfg.yaml]     # ingest a document
-agrag ask "<question>" [--path doc]                       # ask (optionally ingest doc first)
-agrag eval [--golden f.jsonl] [--corpus f.jsonl]          # baseline-vs-agentic eval delta
-agrag serve                                               # run the FastAPI server
+agrag ingest <path> [--tenant T] [--config cfg.yaml]         # ingest a document
+agrag ask "<question>" [--path doc]                           # ask (optionally ingest doc first)
+agrag eval [--gate] [--golden f] [--corpus f] [--control f]   # baseline-vs-agentic delta; --gate exits 1 on regression
+agrag calibrate --labels labels.jsonl [--beta 0.5]            # sweep TAU_ENTAIL + judge↔human Cohen's κ (C28)
+agrag recall [--k 10] [--corpus f]                            # ANN recall@k vs brute-force exact (C1)
+agrag serve                                                   # run the FastAPI server
 ```
+
+---
+
+## Reliability & graceful degradation
+
+Because the scarce resource is GPU-seconds under a fixed slot pool (not API dollars), every model call runs behind three primitives in [`reliability/`](src/agrag/reliability/):
+
+- **Circuit breaker** (`breaker.py`) — per-dependency Closed→Open→HalfOpen; an unhealthy server fails fast to the next tier instead of burning the deadline.
+- **Deadline-gated retries** (`retry.py`) — only *retriable* faults retry, with exponential backoff + full jitter, and never an attempt that can't finish before the deadline.
+- **GPU-slot admission pool** (`slots.py`) — bounded concurrency; a slot not free within the queue budget raises `Backpressure` rather than relocating the queue into the GPU.
+
+These compose into a fixed **degradation ladder** (07 §2.5): full 12B agentic answer → small-model generation (answer flagged `degraded`) → cached answer → honest abstention. The generator ([`grounding/generator.py`](src/agrag/grounding/generator.py)) falls back to `small_llm` on any breaker/backpressure/retry-exhausted signal; the loop still verifies, so a degraded answer is still grounded-or-abstained.
+
+## Security (defense-in-depth, structural not prompted)
+
+Two untrusted surfaces — uploaded PDF text and model-generated tool code — are both treated as hostile ([`security/`](src/agrag/security/), [`tools/sandbox.py`](src/agrag/tools/sandbox.py)):
+
+- **Injection (C29):** chat-template control tokens are neutralized at ingest (`sanitize.py`), evidence is spotlighted behind a per-request nonce and delimited as data, tool names/citation IDs are grammar-constrained to an allowlist, and a post-hoc **output filter** (`output_filter.py`) fails the query *closed* to abstention if the answer leaks the nonce, a template token, or a system-prompt fingerprint.
+- **Sandbox (C30):** the arithmetic tool AST-validates (no imports/attributes/dunders) then runs in a network-denied, resource-capped subprocess (gVisor/Firecracker are the drop-in production isolation behind the same interface).
+- **Tenancy (C31):** every vector/lexical/doc/session/cache lookup is tenant-scoped; the mandatory filter is a security boundary, not an optimization.
+- **PII (`pii.py`):** email/SSN/phone/Luhn-card detection tags chunk metadata at ingest (tag-and-restrict).
+- **PDF-bomb:** upload-size + per-parse wall-clock caps quarantine oversized/slow inputs before they touch a worker.
 
 ---
 
@@ -185,9 +259,12 @@ Selected knobs (see [`src/agrag/config.py`](src/agrag/config.py) for the full se
 | `agent_mode` | `agentic` | `agentic` FSM vs `baseline` vanilla control |
 | `agent.max_iters` / `wall_clock_s` / `token_budget` | 3 / 30s / 20k | The hard budget every query runs under |
 | `retrieval.over_fetch` → `top_k` | 100 → 8 | The retrieve→rerank funnel width |
-| `cache.semantic_threshold` | 0.97 | Semantic-cache similarity floor (correctness-critical) |
+| `cache.answers_enabled` / `semantic_enabled` / `semantic_threshold` | true / true / 0.97 | Answer cache; semantic floor is correctness-critical |
 | `parser.max_upload_mb` / `parse_timeout_s` | 100 / 120s | PDF-bomb guards |
-| `verifier.tau_entail` / `tau_contra` | — | Entailment thresholds; the gray zone abstains |
+| `verifier.tau_entail` / `tau_contra` / `judge_gray_zone` | 0.85 / 0.10 / true | Entailment thresholds; gray zone escalates to the LLM judge then abstains |
+| `reliability.max_retries` / `breaker_failures` / `slot_wait_fraction` | 2 / 5 / 0.3 | Retry, circuit-breaker trip, backpressure queue budget |
+| `agent.max_scan_chunks` | 500 | Aggregation full-scan bound (truncation is logged, never silent) |
+| `serving.rate_limit_qpm` | 0 (off) | Per-tenant queries/minute cap (denial-of-GPU guard) |
 
 ---
 
@@ -199,7 +276,13 @@ The eval harness runs the same golden set through **both** the vanilla baseline 
 agrag eval        # or: make eval
 ```
 
-Metrics per item, aggregated: `token_f1` / `exact_match` vs gold answers, `recall@k` + `context_precision` vs gold chunk ids, `faithfulness` + `citation_accuracy` (are quotes really in the cited chunks?), `correct_refusal` on unanswerable items, and `over_abstention` on answerable ones. The golden set (`data/golden/`) is frozen fixture data; `eval/gate.py` holds the regression floors intended for CI.
+Metrics per item, aggregated: `token_f1` / `exact_match` vs gold answers, `recall@k` + `context_precision` vs gold chunk ids, `faithfulness` + `citation_accuracy` (are quotes really in the cited chunks?), `correct_refusal` on unanswerable items, and `over_abstention` on answerable ones. The golden set (`data/golden/`) is frozen fixture data (question set, corpus, and an injection corpus for the security surface).
+
+**CI regression gate.** [`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs `ruff` then `agrag eval --gate`, which re-runs the frozen baseline as the live control and exits non-zero if the agentic run regresses any locked metric beyond tolerance ([`eval/gate.py`](src/agrag/eval/gate.py), C27). Because the local stack is fully deterministic (fake LLM + hashed embeddings), the gate is stable — no flakiness.
+
+**Judge calibration (C28).** `agrag calibrate` sweeps `TAU_ENTAIL` off a labeled set (biased so a hallucination costs more than an over-abstention) and reports judge↔human Cohen's κ — a judge's scores don't count toward a metric until κ clears the bar ([`eval/calibration.py`](src/agrag/eval/calibration.py)).
+
+**ANN recall (C1).** `agrag recall` measures recall@k of the ANN candidate generator against brute-force exact kNN — needs no human labels, and is meant to re-run after any index rebuild / quantization change / embedding swap ([`eval/recall.py`](src/agrag/eval/recall.py)).
 
 ---
 
@@ -210,32 +293,32 @@ Every design choice carries a stable concept ID. Grouped, with where each group 
 | Group | Concepts | Maps to |
 |---|---|---|
 | **A · Vector search & retrieval** | C1 ANN triangle · C2 quantization · C3 embedding versioning · C4 retrieve→rerank · C5 RRF fusion · C6 near-dup dedupe | `adapters/vectorstore/*`, `adapters/lexical/bm25.py`, `adapters/reranker/*`, `retrieval/hybrid.py`, `contracts/chunk.py` (`embedding_model`+`version`) |
-| **B · Concurrency** | C7 async fan-out/fan-in · C8 backpressure (GPU-slot semaphore) · C9 CPU/GPU vs I/O separation | `agent/app.py`, `serving/app.py`, `ingestion/service.py` |
-| **C · Reliability** | C10 idempotency · C11 backoff+jitter · C12 circuit breaker · C13 deadline propagation · C14 fallback cascade · C15 queue load-leveling | `contracts/budget.py` (`Deadline`), `ingestion/service.py` (content-hash), `adapters/llm/*` |
-| **D · Data & caching** | C16 read-your-writes · C17 cache invalidation · C18 multi-level + semantic cache · C19 single-flight · C20 Merkle-diff re-index | `adapters/cache/*`, `adapters/docstore/*`, `ingestion/service.py` |
-| **E · Software design** | C21 dependency inversion · C22 strategy + feature flags · C23 agent-as-FSM · C24 pipeline/chain-of-responsibility | `interfaces/*`, `deps.py`, `container.py`, `config.py`, `agent/app.py`, `ingestion/*` |
-| **F · Observability & eval** | C25 tracing + correlation IDs · C26 p50/p95/p99 + cost SLOs · C27 eval regression gates · C28 deterministic testing / validated judge | `adapters/tracer/*`, `eval/`, `adapters/verifier/*` |
-| **G · Security** | C29 injection defense (data ≠ code) · C30 sandboxed code exec · C31 multi-tenancy isolation | `tools/sandbox.py`, `promptfmt.py` (role separation), tenant filters in `adapters/vectorstore|lexical|docstore/*` |
+| **B · Concurrency** | C7 async fan-out/fan-in · C8 backpressure (GPU-slot semaphore) · C9 CPU/GPU vs I/O separation | `agent/plan_exec.py` (fan-out), `reliability/slots.py`, `grounding/verify.py` (concurrent claims), `ingestion/stages.py` (`to_thread`) |
+| **C · Reliability** | C10 idempotency · C11 backoff+jitter · C12 circuit breaker · C13 deadline propagation · C14 fallback cascade · C15 queue load-leveling | `ingestion/service.py` (content-hash), `reliability/{retry,breaker}.py`, `contracts/budget.py`, `adapters/llm/ollama.py`, `grounding/generator.py` (fallback), `ingestion/jobs.py` |
+| **D · Data & caching** | C16 read-your-writes · C17 cache invalidation · C18 multi-level + semantic cache · C19 single-flight · C20 Merkle-diff re-index | `agent/answer_cache.py`, `adapters/{cache,docstore,session}/*`, `ingestion/{service,stages}.py` (embed reuse + supersede) |
+| **E · Software design** | C21 dependency inversion · C22 strategy + feature flags · C23 agent-as-FSM · C24 pipeline/chain-of-responsibility | `interfaces/*`, `deps.py`, `container.py`, `config.py`, `agent/graph.py`, `ingestion/*` |
+| **F · Observability & eval** | C25 tracing + correlation IDs · C26 p50/p95/p99 + cost SLOs · C27 eval regression gates · C28 deterministic testing / validated judge | `adapters/tracer/{logging,langfuse,otel}.py`, `serving/ops.py`, `eval/{gate,calibration,recall}.py` |
+| **G · Security** | C29 injection defense (data ≠ code) · C30 sandboxed code exec · C31 multi-tenancy isolation | `security/{sanitize,output_filter,pii}.py`, `promptfmt.py`, `tools/sandbox.py`, tenant filters in `adapters/{vectorstore,lexical,docstore,session}/*` |
 
 ---
 
 ## Roadmap status
 
-Three milestones, nine steps, each gated by a *Done-when* and the single metric it must move. Status reflects the current build.
+Three milestones, nine steps, each gated by a *Done-when* and the single metric it must move. ✅ implemented · 🟢 implemented, full-mode-quality unverified without a GPU box · ⚪ deferred.
 
-| Step | Milestone | What it adds | Metric to move | Status |
-|---|---|---|---|---|
-| 1 · Baseline RAG | M1 Foundation | Fixed-chunk → embed → top-k → grounded prompt control, behind strategy interfaces; frozen golden set | Baseline faithfulness + correctness | 🟡 In progress |
-| 2 · Robust ingestion | M1 Foundation | Layout parse, OCR routing, table extraction, boilerplate strip, hierarchical chunk; idempotent content-hashed jobs + Merkle diff | Table-QA correctness; coverage | ⚪ Planned |
-| 3 · Hybrid + rerank | M1 Foundation | BM25 + dense fused by RRF, cross-encoder rerank, MinHash dedupe, metadata filters | recall@k, nDCG, exact-match | ⚪ Planned |
-| 4 · Plan + grade | M2 Agentic core | Router + decomposition + CRAG grader as an FSM (iter cap + deadline); sandboxed code tool | Multi-hop / aggregation correctness | ⚪ Planned |
-| 5 · Verify + abstain | M2 Agentic core | NLI groundedness verifier, per-claim citation matching, calibrated abstention | Faithfulness; correct/false-refusal | ⚪ Planned |
-| 6 · Multi-turn | M2 Agentic core | Externalized conversation state + follow-up rewriting | Follow-up resolution | ⚪ Planned |
-| 7 · Advanced retrieval | M3 Scale + harden | ONE differentiator (ColPali / GraphRAG / RAPTOR) by dominant eval failure | Target-class metric (no regression) | ⚪ Planned |
-| 8 · Eval + tracing | M3 Scale + harden | Benchmark suite, OTel spans, p95/p99 + cost dashboard, CI regression gates | p95/p99, cost/query, trace coverage | ⚪ Planned |
-| 9 · Harden + scale | M3 Scale + harden | Injection defense, tenant isolation, GPU-slot backpressure, cascade, caching + invalidation, ANN/quant tuning | Injection success → 0; cross-tenant leaks = 0 | ⚪ Planned |
+| Step | Milestone | What it adds | Status |
+|---|---|---|---|
+| 1 · Baseline RAG | M1 Foundation | Fixed-chunk → embed → top-k → grounded prompt control, behind strategy interfaces; frozen golden set | ✅ |
+| 2 · Robust ingestion | M1 Foundation | Layout parse + OCR/vision cascade, table extraction + subtotal checksum, boilerplate strip, cross-ref/footnote linking, equation/list atomic chunks, hierarchical chunk; idempotent content-hashed jobs, per-chunk embed reuse, supersede-on-edit | ✅ |
+| 3 · Hybrid + rerank | M1 Foundation | BM25 + dense fused by RRF, cross-encoder rerank, MinHash dedupe, metadata/self-query filters, lost-in-the-middle reorder | ✅ |
+| 4 · Plan + grade | M2 Agentic core | Router + decomposition + concurrent fan-out + CRAG grader as a LangGraph FSM (iter cap + deadline); sandboxed code tool; aggregation map-reduce full-scan | ✅ |
+| 5 · Verify + abstain | M2 Agentic core | NLI/lexical groundedness verifier + gray-zone judge escalation, per-claim citation matching, calibrated abstention + κ/τ calibration tooling | ✅ |
+| 6 · Multi-turn | M2 Agentic core | Server-side session store (memory/redis) + follow-up rewriting (coref/ellipsis) | ✅ |
+| 7 · Advanced retrieval | M3 Scale + harden | ONE differentiator (ColPali / GraphRAG / RAPTOR) chosen by dominant eval failure | ⚪ deferred (chosen from eval data) |
+| 8 · Eval + tracing | M3 Scale + harden | Eval harness + delta, CI regression gate, OTel spans, `/stats` p50/p95/p99 + rates, ANN-recall + judge-κ tooling | 🟢 (real benchmark datasets pending; synthetic golden set today) |
+| 9 · Harden + scale | M3 Scale + harden | Layered injection defense + output filter, tenant isolation, GPU-slot backpressure + circuit breaker + retries, small→large cascade, answer cache + invalidation + single-flight, per-tenant rate limits, PDF-bomb caps, ANN-recall measurement | ✅ |
 
-**Foundation substrate (done):** typed data contracts, the `LLM`/`EmbeddingModel`/`VectorStore`/`LexicalIndex`/`DocStore`/`Cache`/`Parser`/`Chunker`/`Retriever`/`Reranker`/`Grader`/`Verifier`/`ToolRunner`/`Tracer` interfaces, the feature-flagged composition root (`container.py`), config loading with env overrides, and local-mode fallback adapters (fake LLM, hash embeddings, in-memory stores) — the C21/C22/C23 backbone every step swaps into.
+**Only genuine gap:** step 7's one advanced retrieval differentiator (intentionally last — the roadmap picks it from the dominant eval-failure class) and swapping the synthetic golden set for the real benchmark suites (FinanceBench / TAT-QA / ConvFinQA / DocVQA). Everything else across all nine steps is implemented behind the swappable interfaces and exercised in local mode; full-mode *answer quality* (real Gemma + BGE + NLI + Qdrant) is the only thing that needs a GPU box to validate.
 
 ---
 
@@ -263,20 +346,29 @@ AgenticRag/
     │   ├── storage.py          #   VectorStore, LexicalIndex, DocStore, Cache
     │   ├── pipeline.py         #   Parser, Chunker, Retriever, Reranker, Grader, Verifier, ToolRunner, Tracer
     │   └── types.py            #   LLMResult, EmbeddingResult, VectorRecord, ToolResult, VerdictResult, SparseVector
-    └── adapters/               # concrete strategies behind the interfaces (C22)
-        ├── llm/                #   fake (local) | ollama
-        ├── embedding/          #   hash (local) | bge_m3
-        ├── vectorstore/        #   memory (local) | qdrant   (+ filters.py: tenant scoping, C31)
-        ├── lexical/            #   bm25
-        ├── docstore/           #   memory (local) | redis
-        ├── reranker/           #   identity (local) | bge
-        ├── verifier/           #   lexical (local) | nli
-        ├── cache/              #   memory (local) | redis
-        ├── tracer/             #   logging (local) | langfuse
-        └── parser/             #   text (local) | pymupdf
+    ├── adapters/               # concrete strategies behind the interfaces (C22)
+    │   ├── llm/                #   fake (local) | ollama (breaker+retry+slots)
+    │   ├── embedding/          #   hash (local) | bge_m3
+    │   ├── vectorstore/        #   memory (local) | qdrant   (+ filters.py: tenant scoping, C31)
+    │   ├── lexical/            #   bm25            docstore/  memory | redis
+    │   ├── reranker/           #   identity | bge  verifier/  lexical | nli
+    │   ├── cache/              #   memory | redis  session/   memory | redis (C16)
+    │   ├── tracer/             #   logging | langfuse | otel
+    │   └── parser/             #   text (local) | pymupdf  (+ mathdetect.py: equation blocks)
+    ├── ingestion/              # offline plane: service (idempotent job FSM), stages, chunker,
+    │   │                       #   hashing, jobs, crossref (footnote/§ linking)
+    ├── retrieval/              # hybrid.py (RRF→dedupe→rerank→reorder), rrf, dedupe, selfquery
+    ├── agent/                  # graph.py (LangGraph FSM), app, plan_exec (fan-out + code + aggregate),
+    │   │                       #   grader (CRAG), aggregate (map-reduce), answer_cache, schemas, state
+    ├── grounding/              # generator (cited + fallback tier), verify (NLI+judge), answer_builder
+    ├── baseline/               # vanilla.py — the frozen single-shot control (C22/C27)
+    ├── reliability/            # retry (jitter), breaker (circuit), slots (backpressure), errors
+    ├── security/               # sanitize (token-escape), output_filter (fail-closed), pii
+    ├── tools/                  # sandbox.py — AST-validated, network-denied code exec (C30)
+    ├── serving/                # app.py (FastAPI), ops.py (rate limiter + latency percentiles)
+    ├── eval/                   # golden, metrics, harness, gate (C27), calibration (κ/τ), recall (C1)
+    └── cli.py                  # ingest | ask | eval --gate | calibrate | recall | serve
 ```
-
-Additional packages the composition root wires as the roadmap lands: `ingestion/` (chunker + idempotent service), `retrieval/hybrid.py` (RRF fuse + rerank + dedupe), `agent/` (grader + FSM app), `baseline/vanilla.py` (the control), `tools/sandbox.py`, `serving/app.py` (FastAPI), `cli.py`, and `eval/` (golden-set harness).
 
 ---
 

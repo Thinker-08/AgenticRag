@@ -175,6 +175,34 @@ class FakeLLM:
             rationale="heuristic-fake",
         )
 
+    def _mk_judgement(self, prompt: str, schema: Type[T]) -> T:
+        # gray-zone tie-break: mirror lexical entailment — a claim number absent from the evidence
+        # is the hallucinated-figure failure the verifier exists to catch.
+        evidence = extract_tag(prompt, "evidence")
+        claim = extract_tag(prompt, "claim")
+        num = re.compile(r"-?\d[\d,]*\.?\d*")
+        claim_nums = {n.replace(",", "").rstrip(".") for n in num.findall(claim)}
+        ev_nums = {n.replace(",", "").rstrip(".") for n in num.findall(evidence)}
+        ctoks = set(_toks(claim))
+        etoks = set(_toks(evidence))
+        overlap = len(ctoks & etoks) / (len(ctoks) or 1)
+        supported = overlap >= 0.6 and claim_nums.issubset(ev_nums)
+        return schema(supported=supported, rationale="heuristic-judge")
+
+    def _mk_extracteditems(self, prompt: str, schema: Type[T]) -> T:
+        blocks = parse_evidence_blocks(prompt)
+        text = "\n".join(b["text"] for b in blocks) or prompt
+        items: list[str] = []
+        for m in re.finditer(r"^\s*(?:[-*•]|\d+[.)])\s+(.+)$", text, re.MULTILINE):  # bullet/numbered
+            items.append(m.group(1).strip())
+        for m in re.finditer(r"(?:Segment|Item|Name|Subsidiary):\s*([^.;\n]+)", text, re.IGNORECASE):
+            items.append(m.group(1).strip())
+        if not items:  # fall back to a labeled inline list "A, B and C"
+            m = re.search(r":\s*([A-Z][^.\n]{3,120}(?:,[^.\n]+)+)", text)
+            if m:
+                items = [p.strip() for p in re.split(r",|\band\b", m.group(1)) if p.strip()]
+        return schema(items=[i for i in items if i][:200])
+
     def _mk_rewriteresult(self, prompt: str, schema: Type[T]) -> T:
         q = _query_of(prompt)
         entities = [e.strip() for e in extract_tag(prompt, "entities").split(",") if e.strip()]

@@ -9,7 +9,7 @@ from .pipeline import (
     Tracer,
     Verifier,
 )
-from .storage import Cache, DocStore, LexicalIndex, VectorStore
+from .storage import Cache, DocStore, LexicalIndex, SessionStore, VectorStore
 from .types import (
     EmbeddingResult,
     LLMResult,
@@ -32,6 +32,7 @@ __all__ = [
     "Parser",
     "Reranker",
     "Retriever",
+    "SessionStore",
     "SparseVector",
     "ToolResult",
     "ToolRunner",

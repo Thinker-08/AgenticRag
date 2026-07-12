@@ -1,7 +1,11 @@
-"""Structured-logging tracer: one trace per query, one span per step (C25)."""
+"""Structured-logging tracer: one trace per query, one span per step (C25).
+
+Emits to stderr so the CLI's stdout stays clean, machine-parseable JSON (`agrag eval` / `recall`).
+"""
 
 from __future__ import annotations
 
+import sys
 import time
 from contextlib import contextmanager
 from contextvars import ContextVar
@@ -10,6 +14,8 @@ import structlog
 
 _trace_id: ContextVar[str] = ContextVar("trace_id", default="-")
 _depth: ContextVar[int] = ContextVar("span_depth", default=0)
+
+structlog.configure(logger_factory=structlog.PrintLoggerFactory(file=sys.stderr))
 
 
 class LoggingTracer:
