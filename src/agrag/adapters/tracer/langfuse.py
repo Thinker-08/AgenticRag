@@ -20,11 +20,13 @@ class LangfuseTracer:
             from langfuse import Langfuse
 
             self._client = Langfuse(host=host)
-        except Exception as e:  # missing dep or bad config -> no-op tracing
+        except Exception as e:
             _log.warning("Langfuse unavailable; tracing disabled: %s", e)
 
     @contextlib.contextmanager
-    def start_trace(self, name: str, *, trace_id: str, tenant_id: str, **attrs) -> AbstractContextManager:
+    def start_trace(
+        self, name: str, *, trace_id: str, tenant_id: str, **attrs
+    ) -> AbstractContextManager:
         if self._client is None:
             yield None
             return
@@ -32,7 +34,9 @@ class LangfuseTracer:
         token = None
         try:
             handle = self._client.trace(
-                id=trace_id, name=name, user_id=tenant_id,
+                id=trace_id,
+                name=name,
+                user_id=tenant_id,
                 metadata={"tenant_id": tenant_id, **attrs},
             )
             token = _current.set(handle)

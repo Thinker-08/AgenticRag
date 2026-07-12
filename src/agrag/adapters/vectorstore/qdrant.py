@@ -40,7 +40,7 @@ class QdrantVectorStore:
         for rec in records:
             chunk = rec.chunk
             payload = chunk.model_dump()
-            for key, val in chunk.extra_metadata.items():  # promote for filtering
+            for key, val in chunk.extra_metadata.items():
                 payload.setdefault(key, val)
             vectors: dict = {"dense": rec.dense}
             if rec.sparse:
@@ -76,7 +76,9 @@ class QdrantVectorStore:
                 indices=list(query_sparse.keys()), values=list(query_sparse.values())
             )
             prefetch = [
-                qm.Prefetch(query=query_dense, using="dense", filter=qfilter, params=params, limit=top_k),
+                qm.Prefetch(
+                    query=query_dense, using="dense", filter=qfilter, params=params, limit=top_k
+                ),
                 qm.Prefetch(query=sparse, using="sparse", filter=qfilter, limit=top_k),
             ]
             resp = await self._client.query_points(
@@ -99,7 +101,9 @@ class QdrantVectorStore:
 
         out: list[ScoredChunk] = []
         for i, hit in enumerate(resp.points):
-            out.append(ScoredChunk(chunk=Chunk.model_validate(hit.payload), score=hit.score, dense_rank=i))
+            out.append(
+                ScoredChunk(chunk=Chunk.model_validate(hit.payload), score=hit.score, dense_rank=i)
+            )
         return out
 
     async def delete_doc(self, doc_id: str, tenant_id: str) -> None:
@@ -125,7 +129,9 @@ class QdrantVectorStore:
             flt = qm.Filter(
                 must=[qm.FieldCondition(key="tenant_id", match=qm.MatchValue(value=tenant_id))]
             )
-        resp = await self._client.count(collection_name=self._collection, count_filter=flt, exact=True)
+        resp = await self._client.count(
+            collection_name=self._collection, count_filter=flt, exact=True
+        )
         return resp.count
 
     async def _ensure_collection(self) -> None:

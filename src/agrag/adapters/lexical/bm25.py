@@ -1,5 +1,4 @@
 """BM25 lexical index — the exact-token leg of hybrid retrieval (C5).
-
 Rebuilds the per-tenant BM25 matrix on demand; fine at portfolio scale. Nails part numbers,
 statute refs, tickers, and rare proper nouns that dense embeddings smear.
 """
@@ -26,7 +25,7 @@ class Bm25Index:
     def __init__(self, k1: float = 1.5, b: float = 0.75) -> None:
         self.k1 = k1
         self.b = b
-        self._chunks: dict[str, list[Chunk]] = {}                # tenant -> chunks
+        self._chunks: dict[str, list[Chunk]] = {}
         self._models: dict[str, tuple[BM25Okapi, list[Chunk]]] = {}
         self._dirty: set[str] = set()
 
@@ -39,23 +38,32 @@ class Bm25Index:
 
     def _model(self, tenant_id: str):
         if tenant_id in self._dirty or tenant_id not in self._models:
-            chunks = list(self._chunks.get(tenant_id, []))   # snapshot: rebuild runs off-loop
+            chunks = list(self._chunks.get(tenant_id, []))
             corpus = [_tokenize(c.linearized_text or c.text) for c in chunks]
-            self._models[tenant_id] = (BM25Okapi(corpus, k1=self.k1, b=self.b) if corpus else None, chunks)
+            self._models[tenant_id] = (
+                BM25Okapi(corpus, k1=self.k1, b=self.b) if corpus else None,
+                chunks,
+            )
             self._dirty.discard(tenant_id)
         return self._models[tenant_id]
 
     async def search(
         self, query: str, *, tenant_id: str, top_k: int = 100, filters: dict | None = None
     ) -> list[ScoredChunk]:
-        model, chunks = await asyncio.to_thread(self._model, tenant_id)  # CPU-bound off the loop (C9)
+        model, chunks = await asyncio.to_thread(self._model, tenant_id)
         if not model or not chunks:
             return []
         scores = await asyncio.to_thread(model.get_scores, _tokenize(query))
         ranked = sorted(zip(chunks, scores), key=lambda p: p[1], reverse=True)
         out: list[ScoredChunk] = []
         for c, s in ranked:
-            meta = {**c.extra_metadata, "page_no": c.page_no, "kind": c.kind, "doc_id": c.doc_id, "lang": c.lang}
+            meta = {
+                **c.extra_metadata,
+                "page_no": c.page_no,
+                "kind": c.kind,
+                "doc_id": c.doc_id,
+                "lang": c.lang,
+            }
             if not matches(meta, filters):
                 continue
             out.append(ScoredChunk(chunk=c, score=float(s), bm25_rank=len(out)))

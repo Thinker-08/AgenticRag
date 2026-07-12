@@ -24,7 +24,12 @@ class LoggingTracer:
         try:
             yield self
         finally:
-            self._log.info("trace.end", span=name, trace_id=trace_id, ms=round((time.monotonic() - t0) * 1000, 1))
+            self._log.info(
+                "trace.end",
+                span=name,
+                trace_id=trace_id,
+                ms=round((time.monotonic() - t0) * 1000, 1),
+            )
             _trace_id.reset(tok)
 
     @contextmanager
@@ -35,8 +40,12 @@ class LoggingTracer:
         try:
             yield self
         finally:
-            self._log.info("span.end", span=name, trace_id=_trace_id.get(),
-                           ms=round((time.monotonic() - t0) * 1000, 1))
+            self._log.info(
+                "span.end",
+                span=name,
+                trace_id=_trace_id.get(),
+                ms=round((time.monotonic() - t0) * 1000, 1),
+            )
             _depth.reset(depth)
 
     def event(self, name: str, **attrs) -> None:

@@ -21,9 +21,9 @@ class BlockType(str, Enum):
 
 
 class ParseTier(str, Enum):
-    DIGITAL = "digital"     # PyMuPDF text layer
-    OCR = "ocr"             # Tesseract/PaddleOCR
-    VISION = "vision"       # multimodal Gemma
+    DIGITAL = "digital"
+    OCR = "ocr"
+    VISION = "vision"
 
 
 class Table(BaseModel):
@@ -44,7 +44,7 @@ class Table(BaseModel):
         cols = [" ".join(h[c] for h in header if c < len(h)) for c in range(len(self.grid[0]))]
         lines = [f"Table: {self.title}." if self.title else "Table."]
         lines.append("Columns: " + "; ".join(c.strip() for c in cols) + ".")
-        for row in self.grid[self.n_header_rows:]:
+        for row in self.grid[self.n_header_rows :]:
             cells = [f"{cols[i].strip()} {v}" for i, v in enumerate(row) if i < len(cols)]
             lines.append(" — ".join(cells) + ".")
         return "\n".join(lines)
@@ -59,7 +59,7 @@ class Block(BaseModel):
     reading_order: int = 0
     lang: str = "en"
     table: Optional[Table] = None
-    image_ref: Optional[str] = None       # crop retained for answer-time vision
+    image_ref: Optional[str] = None
     breadcrumb: list[str] = Field(default_factory=list)
 
 
@@ -81,5 +81,5 @@ class ParsedDoc(BaseModel):
     filename: str = ""
     page_count: int = 0
     pages: list[Page] = Field(default_factory=list)
-    doc_summary: str = ""                  # cached prompt prefix for contextualize
+    doc_summary: str = ""
     extra_metadata: dict = Field(default_factory=dict)

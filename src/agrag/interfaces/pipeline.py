@@ -21,7 +21,9 @@ from .types import ToolResult, VerdictResult
 class Parser(Protocol):
     """Parse/OCR: extract text + geometry, cascading digital -> OCR -> vision by text-ratio (03 §1)."""
 
-    async def parse(self, data: bytes, *, doc_id: str, tenant_id: str, filename: str = "") -> ParsedDoc: ...
+    async def parse(
+        self, data: bytes, *, doc_id: str, tenant_id: str, filename: str = ""
+    ) -> ParsedDoc: ...
 
 
 @runtime_checkable
@@ -76,7 +78,9 @@ class Grader(Protocol):
 class Verifier(Protocol):
     """Claim-level NLI entailment against cited spans (06 §3). Not the generator judging itself."""
 
-    async def entail(self, premise: str, hypothesis: str, *, budget: Budget | None = None) -> VerdictResult: ...
+    async def entail(
+        self, premise: str, hypothesis: str, *, budget: Budget | None = None
+    ) -> VerdictResult: ...
 
 
 @runtime_checkable
@@ -90,7 +94,9 @@ class ToolRunner(Protocol):
 class Tracer(Protocol):
     """One trace per query, one span per step/tool (C25)."""
 
-    def start_trace(self, name: str, *, trace_id: str, tenant_id: str, **attrs) -> AbstractContextManager: ...
+    def start_trace(
+        self, name: str, *, trace_id: str, tenant_id: str, **attrs
+    ) -> AbstractContextManager: ...
 
     def span(self, name: str, **attrs) -> AbstractContextManager: ...
 

@@ -43,8 +43,12 @@ class Generator:
             )
             user += f"\n\n<COMPUTATIONS>\n{comp_lines}\n</COMPUTATIONS>"
         draft, llm_result = await self.deps.llm.generate_structured(
-            user, Draft, system=GEN_SYSTEM, temperature=0.0,
-            max_tokens=self.deps.settings.llm.max_tokens, timeout_s=budget.call_timeout_s(),
+            user,
+            Draft,
+            system=GEN_SYSTEM,
+            temperature=0.0,
+            max_tokens=self.deps.settings.llm.max_tokens,
+            timeout_s=budget.call_timeout_s(),
         )
         budget.charge(llm_result.total_tokens)
         if computations:

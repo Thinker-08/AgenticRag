@@ -12,13 +12,15 @@ class BudgetExceeded(Exception):
 
 @dataclass
 class Budget:
-    deadline: float          # absolute monotonic time
-    tokens_left: int         # shared pool across ALL steps + tools
-    iters_left: int          # per-query reformulation cap, strictly decreasing
-    _clock: object = time    # injectable for deterministic tests
+    deadline: float
+    tokens_left: int
+    iters_left: int
+    _clock: object = time
 
     @classmethod
-    def start(cls, wall_clock_s: float, token_budget: int, max_iters: int = 3, clock=time) -> "Budget":
+    def start(
+        cls, wall_clock_s: float, token_budget: int, max_iters: int = 3, clock=time
+    ) -> "Budget":
         return cls(
             deadline=clock.monotonic() + wall_clock_s,
             tokens_left=token_budget,

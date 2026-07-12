@@ -23,13 +23,24 @@ async def _ingest(args) -> None:
     path = Path(args.path)
     data = path.read_bytes()
     doc = await ingestion.ingest(data, tenant_id=args.tenant, filename=path.name)
-    print(json.dumps({"doc_id": doc.doc_id, "status": doc.status, "pages": doc.page_count,
-                      "chunks": await deps.vectorstore.count(args.tenant), "error": doc.error}, indent=2))
+    print(
+        json.dumps(
+            {
+                "doc_id": doc.doc_id,
+                "status": doc.status,
+                "pages": doc.page_count,
+                "chunks": await deps.vectorstore.count(args.tenant),
+                "error": doc.error,
+            },
+            indent=2,
+        )
+    )
 
 
 async def _ask(args) -> None:
     from .agent.app import AgentApp
     from .baseline.vanilla import BaselineRAG
+
     settings = _settings(args)
     deps = build_deps(settings)
     app = BaselineRAG(deps) if settings.is_baseline() else AgentApp(deps)
@@ -41,7 +52,7 @@ async def _ask(args) -> None:
     print(f"\n[{ans.status.value}] {ans.answer_text}\n")
     for c in ans.claims:
         for cit in c.citations:
-            print(f"  · {cit.chunk_id} (p{cit.page_no}): \"{cit.quote[:80]}\"")
+            print(f'  · {cit.chunk_id} (p{cit.page_no}): "{cit.quote[:80]}"')
     for comp in ans.computations:
         print(f"  Σ {comp.code} = {comp.result}  [{comp.sandbox_run_id}]")
     if ans.gaps:
@@ -51,16 +62,20 @@ async def _ask(args) -> None:
 async def _eval(args) -> None:
     from .eval.golden import load_corpus, load_golden
     from .eval.harness import EvalHarness
+
     corpus = load_corpus(args.corpus)
     golden = load_golden(args.golden)
     settings = _settings(args)
-    # the control is vanilla by construction: fixed-size chunks, single-shot (page 13, step 1)
-    baseline_settings = settings.model_copy(update={
-        "agent_mode": "baseline",
-        "chunker": settings.chunker.model_copy(update={"provider": "recursive"}),
-    })
+    baseline_settings = settings.model_copy(
+        update={
+            "agent_mode": "baseline",
+            "chunker": settings.chunker.model_copy(update={"provider": "recursive"}),
+        }
+    )
     agentic_settings = settings.model_copy(update={"agent_mode": "agentic"})
-    result = await EvalHarness(agentic_settings, corpus=corpus).compare(baseline_settings, agentic_settings, golden, corpus=corpus, tenant_id=args.tenant)
+    result = await EvalHarness(agentic_settings, corpus=corpus).compare(
+        baseline_settings, agentic_settings, golden, corpus=corpus, tenant_id=args.tenant
+    )
     out = {
         "baseline": result["baseline"].aggregate,
         "agentic": result["agentic"].aggregate,
@@ -71,13 +86,16 @@ async def _eval(args) -> None:
 
 def _serve(args) -> None:
     import uvicorn
+
     settings = _settings(args)
     uvicorn.run("agrag.serving.app:app", host=settings.serving.host, port=settings.serving.port)
 
 
 def main(argv=None) -> int:
     common = argparse.ArgumentParser(add_help=False)
-    common.add_argument("--config", default=None, help="config yaml (else $AGRAG_CONFIG or config/default.yaml)")
+    common.add_argument(
+        "--config", default=None, help="config yaml (else $AGRAG_CONFIG or config/default.yaml)"
+    )
     common.add_argument("--tenant", default="default")
 
     parser = argparse.ArgumentParser(prog="agrag", parents=[common])
@@ -90,7 +108,9 @@ def main(argv=None) -> int:
     ask_parser.add_argument("query")
     ask_parser.add_argument("--path", help="ingest this doc first")
 
-    eval_parser = sub.add_parser("eval", parents=[common], help="run the eval delta (baseline vs agent)")
+    eval_parser = sub.add_parser(
+        "eval", parents=[common], help="run the eval delta (baseline vs agent)"
+    )
     eval_parser.add_argument("--golden", default="data/golden/sample.jsonl")
     eval_parser.add_argument("--corpus", default="data/golden/sample_corpus.jsonl")
     sub.add_parser("serve", parents=[common], help="run the FastAPI server")

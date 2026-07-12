@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 
 from ..contracts import Chunk, SupportLabel
 
-SparseVector = dict[int, float]     # term_id -> weight
+SparseVector = dict[int, float]
 
 
 @dataclass

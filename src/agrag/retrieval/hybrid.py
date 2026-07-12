@@ -72,11 +72,14 @@ class HybridRetriever:
         filters = dict(filters or {})
         if strategy == Strategy.TABLE:
             filters.setdefault("kind", "table")
-        # DOC_SUMMARY degrades to broad hybrid until RAPTOR summary nodes exist (M3 differentiator).
 
         over_fetch = self.cfg.over_fetch
         dense_task = self._dense(query, tenant_id, over_fetch, filters) if use_dense else _empty()
-        bm25_task = self.lexical.search(query, tenant_id=tenant_id, top_k=over_fetch, filters=filters) if use_bm25 else _empty()
+        bm25_task = (
+            self.lexical.search(query, tenant_id=tenant_id, top_k=over_fetch, filters=filters)
+            if use_bm25
+            else _empty()
+        )
         dense_res, bm25_res = await asyncio.gather(dense_task, bm25_task)
 
         bm25_w = self.cfg.bm25_weight * (2.0 if strategy == Strategy.BM25 else 1.0)
@@ -91,7 +94,9 @@ class HybridRetriever:
         reranked = await self.reranker.rerank(query, deduped, top_k=top_k, budget=budget)
         return reranked
 
-    async def _dense(self, query: str, tenant_id: str, top_k: int, filters: dict | None) -> list[ScoredChunk]:
+    async def _dense(
+        self, query: str, tenant_id: str, top_k: int, filters: dict | None
+    ) -> list[ScoredChunk]:
         emb = await asyncio.to_thread(self.embedding.encode_queries, [query])
         sparse = emb.sparse[0] if emb.sparse else None
         results = await self.vectorstore.search(
@@ -100,7 +105,8 @@ class HybridRetriever:
         for sc in results:
             c = sc.chunk
             if c.embedding_model and (
-                c.embedding_model != self.embedding.model or c.embedding_version != self.embedding.version
+                c.embedding_model != self.embedding.model
+                or c.embedding_version != self.embedding.version
             ):
                 raise EmbeddingContractError(
                     f"index vectors are ({c.embedding_model}, {c.embedding_version}) but the query "

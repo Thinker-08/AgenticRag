@@ -55,14 +55,19 @@ class FakeLLM:
         q = _query_of(prompt)
         low = q.lower()
         if "context" in (system or "").lower() and "situate" in prompt.lower():
-            text = f"This passage concerns: {q[:80]}."       # contextualize blurb
+            text = f"This passage concerns: {q[:80]}."
         elif any(w in low for w in _CHIT):
             text = "I answer questions strictly from the uploaded documents, with citations. Ask about their content."
         elif "reformulate" in (system or "").lower() or "rewrite" in prompt.lower():
             text = q + " (exact terms, figures)"
         else:
             text = q
-        return LLMResult(text=text, prompt_tokens=len(_toks(prompt)), completion_tokens=len(_toks(text)), model=self.model)
+        return LLMResult(
+            text=text,
+            prompt_tokens=len(_toks(prompt)),
+            completion_tokens=len(_toks(text)),
+            model=self.model,
+        )
 
     async def generate_structured(
         self,
@@ -78,10 +83,13 @@ class FakeLLM:
         name = schema.__name__
         handler = getattr(self, f"_mk_{name.lower()}", None)
         obj = handler(prompt, schema) if handler else self._mk_default(prompt, schema)
-        result = LLMResult(text=obj.model_dump_json(), prompt_tokens=len(_toks(prompt)),
-                           completion_tokens=len(_toks(obj.model_dump_json())), model=self.model)
+        result = LLMResult(
+            text=obj.model_dump_json(),
+            prompt_tokens=len(_toks(prompt)),
+            completion_tokens=len(_toks(obj.model_dump_json())),
+            model=self.model,
+        )
         return obj, result
-
 
     @staticmethod
     def _intent(q: str) -> str:
@@ -94,14 +102,20 @@ class FakeLLM:
             return "aggregation"
         if any(w in low for w in _SUM):
             return "summarization"
-        if ("who" in low or "which" in low) and ("largest" in low or "highest" in low or "then" in low):
+        if ("who" in low or "which" in low) and (
+            "largest" in low or "highest" in low or "then" in low
+        ):
             return "multi_hop"
         return "factoid"
 
     def _mk_route(self, prompt: str, schema: Type[T]) -> T:
         intent = self._intent(_query_of(prompt))
-        return schema(intent=intent, needs_retrieval=intent != "chitchat", history_answerable=False,
-                      rationale="heuristic-fake")
+        return schema(
+            intent=intent,
+            needs_retrieval=intent != "chitchat",
+            history_answerable=False,
+            rationale="heuristic-fake",
+        )
 
     def _mk_queryplan(self, prompt: str, schema: Type[T]) -> T:
         q = _query_of(prompt)
@@ -109,18 +123,27 @@ class FakeLLM:
         qid = extract_tag(prompt, "query_id") or "q"
         steps: list[dict] = []
         if any(w in low for w in _CMP):
-            parts = re.split(r"\s+vs\.?\s+|\s+versus\s+|\s+compared to\s+|\s+and\s+", q, maxsplit=1, flags=re.I)
+            parts = re.split(
+                r"\s+vs\.?\s+|\s+versus\s+|\s+compared to\s+|\s+and\s+", q, maxsplit=1, flags=re.I
+            )
             a = parts[0]
             b = parts[1] if len(parts) > 1 else q
             steps = [
                 {"step_id": "s1", "tool": "hybrid", "query": a, "k": 8, "depends_on": []},
                 {"step_id": "s2", "tool": "hybrid", "query": b, "k": 8, "depends_on": []},
-                {"step_id": "s3", "tool": "code", "query": f"compute comparison of s1 vs s2 for: {q}",
-                 "k": 4, "depends_on": ["s1", "s2"]},
+                {
+                    "step_id": "s3",
+                    "tool": "code",
+                    "query": f"compute comparison of s1 vs s2 for: {q}",
+                    "k": 4,
+                    "depends_on": ["s1", "s2"],
+                },
             ]
             merge = "compare"
         elif any(w in low for w in _AGG):
-            steps = [{"step_id": "s1", "tool": "metadata_filter", "query": q, "k": 50, "depends_on": []}]
+            steps = [
+                {"step_id": "s1", "tool": "metadata_filter", "query": q, "k": 50, "depends_on": []}
+            ]
             merge = "aggregate"
         elif any(w in low for w in _SUM):
             steps = [{"step_id": "s1", "tool": "doc_summary", "query": q, "k": 8, "depends_on": []}]
@@ -128,8 +151,13 @@ class FakeLLM:
         else:
             steps = [{"step_id": "s1", "tool": "hybrid", "query": q, "k": 8, "depends_on": []}]
             merge = "concat"
-        return schema(query_id=qid, trace_id=extract_tag(prompt, "trace_id"), intent=self._intent(q),
-                      sub_steps=steps, merge=merge)
+        return schema(
+            query_id=qid,
+            trace_id=extract_tag(prompt, "trace_id"),
+            intent=self._intent(q),
+            sub_steps=steps,
+            merge=merge,
+        )
 
     def _mk_grade(self, prompt: str, schema: Type[T]) -> T:
         blocks = parse_evidence_blocks(prompt)
@@ -139,8 +167,13 @@ class FakeLLM:
             overlap = len(q & set(_toks(b["text"]))) / (len(q) or 1)
             best = max(best, overlap)
         verdict = "SUFFICIENT" if best >= 0.3 else ("AMBIGUOUS" if blocks else "IRRELEVANT")
-        return schema(verdict=verdict, max_relevance=round(best, 3), covered_slots=[], missing_slots=[],
-                      rationale="heuristic-fake")
+        return schema(
+            verdict=verdict,
+            max_relevance=round(best, 3),
+            covered_slots=[],
+            missing_slots=[],
+            rationale="heuristic-fake",
+        )
 
     def _mk_rewriteresult(self, prompt: str, schema: Type[T]) -> T:
         q = _query_of(prompt)
@@ -179,17 +212,26 @@ class FakeLLM:
                 seen.add(sent)
                 start = b["text"].find(sent)
                 span = (start, start + len(sent)) if start >= 0 else (0, len(sent))
-                claims.append(DraftClaim(
-                    text=sent,
-                    citations=[Citation(chunk_id=b["chunk_id"], doc_id=b["doc_id"], page_no=b["page"],
-                                        char_span=span, quote=sent)],
-                ))
+                claims.append(
+                    DraftClaim(
+                        text=sent,
+                        citations=[
+                            Citation(
+                                chunk_id=b["chunk_id"],
+                                doc_id=b["doc_id"],
+                                page_no=b["page"],
+                                char_span=span,
+                                quote=sent,
+                            )
+                        ],
+                    )
+                )
         answer_text = " ".join(c.text for c in claims) if claims else ""
-        return schema(answer_text=answer_text, format=AnswerFormat.PROSE, claims=claims, computations=[])
+        return schema(
+            answer_text=answer_text, format=AnswerFormat.PROSE, claims=claims, computations=[]
+        )
 
     def _mk_selfquery(self, prompt: str, schema: Type[T]) -> T:
-        # conservative: pass the query through; structured filters only when a real model
-        # can ground them in fields ingestion actually populated
         return schema(semantic_query=_query_of(prompt), filters={})
 
     def _mk_codeplan(self, prompt: str, schema: Type[T]) -> T:
@@ -200,15 +242,23 @@ class FakeLLM:
         for b in blocks:
             for label, raw in num_re.findall(b["text"]):
                 try:
-                    found.append((label.strip()[:24].replace(" ", "_") or "v", float(raw.replace(",", "")), b["chunk_id"]))
+                    found.append(
+                        (
+                            label.strip()[:24].replace(" ", "_") or "v",
+                            float(raw.replace(",", "")),
+                            b["chunk_id"],
+                        )
+                    )
                 except ValueError:
                     continue
         inputs, code, template = [], "", ""
         if len(found) >= 2:
             (label_a, value_a, chunk_a), (label_b, value_b, chunk_b) = found[0], found[1]
             var_a, var_b = f"a_{len(label_a)}", f"b_{len(label_b)}"
-            inputs = [{"name": var_a, "value": value_a, "source_chunk_id": chunk_a},
-                      {"name": var_b, "value": value_b, "source_chunk_id": chunk_b}]
+            inputs = [
+                {"name": var_a, "value": value_a, "source_chunk_id": chunk_a},
+                {"name": var_b, "value": value_b, "source_chunk_id": chunk_b},
+            ]
             if any(w in q for w in ("change", "growth", "compare", "vs", "versus", "difference")):
                 code = f"result = ({var_a} - {var_b}) / {var_b} * 100"
                 template = "The change is {result}%."
@@ -226,7 +276,9 @@ class FakeLLM:
         for fname, field in schema.model_fields.items():
             if field.is_required():
                 ann = field.annotation
-                data[fname] = "" if ann in (str, str | None) else (0 if ann in (int, float) else None)
+                data[fname] = (
+                    "" if ann in (str, str | None) else (0 if ann in (int, float) else None)
+                )
         try:
             return schema(**data)
         except Exception:

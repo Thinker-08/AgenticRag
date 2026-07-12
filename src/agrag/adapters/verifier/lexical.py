@@ -15,8 +15,34 @@ from ...interfaces.types import VerdictResult
 _WORD = re.compile(r"[a-z]+")
 _NUM = re.compile(r"-?\d[\d,]*\.?\d*")
 _STOP = {
-    "the", "a", "an", "of", "to", "in", "on", "and", "or", "is", "are", "was", "were", "be",
-    "for", "with", "as", "at", "by", "from", "that", "this", "it", "its", "s", "was", "has", "had",
+    "the",
+    "a",
+    "an",
+    "of",
+    "to",
+    "in",
+    "on",
+    "and",
+    "or",
+    "is",
+    "are",
+    "was",
+    "were",
+    "be",
+    "for",
+    "with",
+    "as",
+    "at",
+    "by",
+    "from",
+    "that",
+    "this",
+    "it",
+    "its",
+    "s",
+    "was",
+    "has",
+    "had",
 }
 _NEG = {"not", "no", "never", "without", "excluding", "fell", "decreased", "declined"}
 
@@ -30,7 +56,9 @@ def _nums(text: str) -> set[str]:
 
 
 class LexicalVerifier:
-    async def entail(self, premise: str, hypothesis: str, *, budget: Budget | None = None) -> VerdictResult:
+    async def entail(
+        self, premise: str, hypothesis: str, *, budget: Budget | None = None
+    ) -> VerdictResult:
         prem_words = set(_content_words(premise))
         hyp_words = _content_words(hypothesis)
         if not hyp_words:

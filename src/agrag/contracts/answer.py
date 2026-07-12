@@ -45,15 +45,16 @@ class Computation(BaseModel):
 
 class Claim(BaseModel):
     claim_id: str
-    text: str                                    # ONE atomic proposition
+    text: str
     citations: list[Citation] = Field(default_factory=list)
     support: SupportLabel = SupportLabel.UNSUPPORTED
     entail_score: float = 0.0
-    verifier: str = ""                           # structural | lexical | NLI | LLM_JUDGE
+    verifier: str = ""
 
 
 class DraftClaim(BaseModel):
     """The generator's constrained-decoded output shape (untrusted until verified)."""
+
     text: str
     citations: list[Citation] = Field(default_factory=list)
 
@@ -77,7 +78,7 @@ class Answer(BaseModel):
     claims: list[Claim] = Field(default_factory=list)
     computations: list[Computation] = Field(default_factory=list)
     gaps: list[str] = Field(default_factory=list)
-    abstention_reason: str | None = None         # e.g. "budget_abstain" | "no_evidence" | "contradicted"
+    abstention_reason: str | None = None
 
     def sources(self) -> list[Citation]:
         out: list[Citation] = []

@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 
 class RewriteResult(BaseModel):
     """Follow-up resolution: elliptical/pronoun query -> standalone (05 §9)."""
+
     standalone_query: str
     carried_entities: list[str] = Field(default_factory=list)
     resolved: bool = True
@@ -21,6 +22,7 @@ class CodeInput(BaseModel):
 
 class CodePlan(BaseModel):
     """The LLM sets up arithmetic symbolically over NAMED inputs; the sandbox executes it (06 §4)."""
+
     inputs: list[CodeInput] = Field(default_factory=list)
     code: str = ""
     claim_template: str = ""

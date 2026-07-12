@@ -40,15 +40,23 @@ def create_app(settings=None) -> FastAPI:
 
     @api.get("/health")
     async def health() -> dict:
-        return {"status": "ok", "mode": deps.settings.mode, "agent_mode": deps.settings.agent_mode,
-                "chunks": await deps.vectorstore.count()}
+        return {
+            "status": "ok",
+            "mode": deps.settings.mode,
+            "agent_mode": deps.settings.agent_mode,
+            "chunks": await deps.vectorstore.count(),
+        }
 
     @api.post("/ingest", response_model=JobHandle)
     async def ingest(req: IngestRequest) -> JobHandle:
         if req.text is not None:
-            doc = await ingestion.ingest_text(req.text, tenant_id=req.tenant_id, filename=req.filename)
+            doc = await ingestion.ingest_text(
+                req.text, tenant_id=req.tenant_id, filename=req.filename
+            )
             if doc.status != JobState.READY:
-                raise HTTPException(422, f"ingest {doc.status.value}: {doc.error or 'see /docs status'}")
+                raise HTTPException(
+                    422, f"ingest {doc.status.value}: {doc.error or 'see /docs status'}"
+                )
             return JobHandle(doc_id=doc.doc_id, status="ready")
         if req.content_base64:
             try:
@@ -63,8 +71,14 @@ def create_app(settings=None) -> FastAPI:
         doc = await ingestion.status(tenant_id, doc_id)
         if not doc:
             raise HTTPException(404, "unknown doc")
-        return {"doc_id": doc.doc_id, "status": doc.status, "progress": doc.progress(),
-                "pages_done": doc.pages_done, "page_count": doc.page_count, "error": doc.error}
+        return {
+            "doc_id": doc.doc_id,
+            "status": doc.status,
+            "progress": doc.progress(),
+            "pages_done": doc.pages_done,
+            "page_count": doc.page_count,
+            "error": doc.error,
+        }
 
     @api.post("/ask", response_model=Answer)
     async def ask(req: AskRequest) -> Answer:
@@ -76,8 +90,10 @@ def create_app(settings=None) -> FastAPI:
 def _build_query_app(deps: Deps):
     if deps.settings.is_baseline():
         from ..baseline.vanilla import BaselineRAG
+
         return BaselineRAG(deps)
     from ..agent.app import AgentApp
+
     return AgentApp(deps)
 
 

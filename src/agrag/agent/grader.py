@@ -13,9 +13,34 @@ from typing import Sequence
 from ..contracts import Budget, Grade, GradeVerdict, ScoredChunk, SubStep
 
 _WORD = re.compile(r"[a-z0-9]+")
-_YEAR = re.compile(r"(?<!\d)(?:19|20)\d{2}(?!\d)")   # matches 2019 even glued to letters (FY2019)
-_STOP = {"the", "a", "an", "of", "to", "in", "on", "and", "or", "is", "are", "was", "were",
-         "for", "with", "as", "at", "by", "from", "what", "how", "did", "does", "compare", "vs"}
+_YEAR = re.compile(r"(?<!\d)(?:19|20)\d{2}(?!\d)")
+_STOP = {
+    "the",
+    "a",
+    "an",
+    "of",
+    "to",
+    "in",
+    "on",
+    "and",
+    "or",
+    "is",
+    "are",
+    "was",
+    "were",
+    "for",
+    "with",
+    "as",
+    "at",
+    "by",
+    "from",
+    "what",
+    "how",
+    "did",
+    "does",
+    "compare",
+    "vs",
+}
 
 
 def _content(text: str) -> set[str]:
@@ -26,11 +51,17 @@ class HeuristicGrader:
     def __init__(self, relevance_floor: float = 0.7) -> None:
         self.floor = relevance_floor
 
-    async def grade(self, step: SubStep, candidates: Sequence[ScoredChunk], *, budget: Budget | None = None) -> Grade:
+    async def grade(
+        self, step: SubStep, candidates: Sequence[ScoredChunk], *, budget: Budget | None = None
+    ) -> Grade:
         q = _content(step.query)
         if not candidates or not q:
-            return Grade(verdict=GradeVerdict.IRRELEVANT, max_relevance=0.0, missing_slots=list(q),
-                         rationale="no candidates")
+            return Grade(
+                verdict=GradeVerdict.IRRELEVANT,
+                max_relevance=0.0,
+                missing_slots=list(q),
+                rationale="no candidates",
+            )
         rel = 0.0
         union: set[str] = set()
         ev_text = []
@@ -43,11 +74,14 @@ class HeuristicGrader:
         coverage = len(covered) / len(q)
         missing = sorted(q - covered)
 
-        # temporal mismatch: a queried year/period absent from all evidence can't be covered (04 §6).
         q_years = set(_YEAR.findall(step.query))
         if q_years and not (q_years & set(_YEAR.findall(" ".join(ev_text)))):
-            return Grade(verdict=GradeVerdict.IRRELEVANT, max_relevance=round(rel, 3),
-                         missing_slots=sorted(q_years), rationale="queried period absent from evidence")
+            return Grade(
+                verdict=GradeVerdict.IRRELEVANT,
+                max_relevance=round(rel, 3),
+                missing_slots=sorted(q_years),
+                rationale="queried period absent from evidence",
+            )
 
         if coverage >= 0.6 or (rel >= min(self.floor, 0.5) and coverage >= 0.4):
             verdict = GradeVerdict.SUFFICIENT
@@ -55,5 +89,10 @@ class HeuristicGrader:
             verdict = GradeVerdict.AMBIGUOUS
         else:
             verdict = GradeVerdict.IRRELEVANT
-        return Grade(verdict=verdict, max_relevance=round(rel, 3),
-                     covered_slots=sorted(covered), missing_slots=missing, rationale="heuristic")
+        return Grade(
+            verdict=verdict,
+            max_relevance=round(rel, 3),
+            covered_slots=sorted(covered),
+            missing_slots=missing,
+            rationale="heuristic",
+        )

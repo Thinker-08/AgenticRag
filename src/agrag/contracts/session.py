@@ -8,7 +8,7 @@ from .evidence import Citation
 
 
 class Turn(BaseModel):
-    role: str                       # "user" | "assistant"
+    role: str
     content: str
     citations: list[Citation] = Field(default_factory=list)
     carried_entities: list[str] = Field(default_factory=list)

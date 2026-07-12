@@ -11,16 +11,16 @@ from pydantic import BaseModel, Field
 
 
 class LLMConfig(BaseModel):
-    provider: str = "fake"            # fake | ollama
+    provider: str = "fake"
     model: str = "gemma3:12b"
-    small_model: str = "gemma3:4b"    # optional cheap cascade tier
+    small_model: str = "gemma3:4b"
     host: str = "http://localhost:11434"
     max_tokens: int = 1024
     temperature: float = 0.0
 
 
 class EmbeddingConfig(BaseModel):
-    provider: str = "hash"            # hash | bge_m3
+    provider: str = "hash"
     model: str = "BAAI/bge-m3"
     version: str = "1.5"
     dim: int = 1024
@@ -28,10 +28,10 @@ class EmbeddingConfig(BaseModel):
 
 
 class VectorStoreConfig(BaseModel):
-    provider: str = "memory"          # memory | qdrant
+    provider: str = "memory"
     host: str = "http://localhost:6333"
     collection: str = "agrag_chunks"
-    quantize: str = "none"            # none | int8 | binary
+    quantize: str = "none"
     hnsw_m: int = 32
     ef_construction: int = 256
     ef_search: int = 128
@@ -44,41 +44,41 @@ class LexicalConfig(BaseModel):
 
 
 class RerankerConfig(BaseModel):
-    provider: str = "identity"        # identity | bge
+    provider: str = "identity"
     model: str = "BAAI/bge-reranker-v2-m3"
     device: str = "cpu"
 
 
 class VerifierConfig(BaseModel):
-    provider: str = "lexical"         # lexical | nli
+    provider: str = "lexical"
     model: str = "cross-encoder/nli-deberta-v3-base"
     tau_entail: float = 0.85
     tau_contra: float = 0.10
 
 
 class CacheConfig(BaseModel):
-    provider: str = "memory"          # memory | redis
+    provider: str = "memory"
     host: str = "redis://localhost:6379/0"
     answer_ttl_s: int = 3600
-    semantic_threshold: float = 0.97   # correctness-critical knob (C18)
+    semantic_threshold: float = 0.97
 
 
 class TracerConfig(BaseModel):
-    provider: str = "logging"         # logging | langfuse
+    provider: str = "logging"
     host: str = "http://localhost:3000"
 
 
 class ParserConfig(BaseModel):
-    provider: str = "text"            # text (dependency-free) | pymupdf
+    provider: str = "text"
     text_ratio_threshold: float = 0.1
     max_pages: int = 3000
-    max_upload_mb: int = 100          # PDF-bomb guard: cap raw upload bytes (08 threat 5)
-    parse_timeout_s: float = 120.0    # per-parse wall-clock kill (C13)
+    max_upload_mb: int = 100
+    parse_timeout_s: float = 120.0
     max_inflate_ratio: float = 200.0
 
 
 class ChunkerConfig(BaseModel):
-    provider: str = "hierarchical"    # recursive | semantic | hierarchical
+    provider: str = "hierarchical"
     child_size: int = 320
     parent_size: int = 1500
     overlap: int = 64
@@ -94,7 +94,7 @@ class RetrievalConfig(BaseModel):
 
 
 class SandboxConfig(BaseModel):
-    provider: str = "subprocess"      # subprocess | gvisor | docker
+    provider: str = "subprocess"
     timeout_s: float = 2.0
     max_mem_mb: int = 256
 
@@ -104,7 +104,7 @@ class AgentConfig(BaseModel):
     token_budget: int = 20000
     max_iters: int = 3
     grade_relevance_floor: float = 0.7
-    slot_concurrency: int = 4          # OLLAMA_NUM_PARALLEL
+    slot_concurrency: int = 4
 
 
 class ServingConfig(BaseModel):
@@ -114,8 +114,8 @@ class ServingConfig(BaseModel):
 
 
 class Settings(BaseModel):
-    mode: str = "local"               # local (fallbacks) | full (real services)
-    agent_mode: str = "agentic"       # agentic | baseline (the vanilla control)
+    mode: str = "local"
+    agent_mode: str = "agentic"
     data_dir: str = "./data"
     llm: LLMConfig = Field(default_factory=LLMConfig)
     embedding: EmbeddingConfig = Field(default_factory=EmbeddingConfig)
@@ -153,12 +153,12 @@ def _env_overrides() -> dict[str, Any]:
     for key, val in os.environ.items():
         if not key.startswith("AGRAG_"):
             continue
-        rest = key[len("AGRAG_"):]
+        rest = key[len("AGRAG_") :]
         section = next((s for s in top if rest == s or rest.startswith(s + "_")), None)
         if rest in top:
             out[rest.lower()] = val
         elif section:
-            field = rest[len(section) + 1:].lower()
+            field = rest[len(section) + 1 :].lower()
             out.setdefault(section.lower(), {})[field] = _coerce(val)
     return out
 

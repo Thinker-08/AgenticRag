@@ -17,7 +17,9 @@ log = structlog.get_logger("agrag.jobs")
 
 
 class JobQueue:
-    def __init__(self, handler: Callable[[Job, bytes], Awaitable[None]], concurrency: int = 2) -> None:
+    def __init__(
+        self, handler: Callable[[Job, bytes], Awaitable[None]], concurrency: int = 2
+    ) -> None:
         self._handler = handler
         self._q: asyncio.Queue[tuple[Job, bytes]] = asyncio.Queue()
         self._sem = asyncio.Semaphore(concurrency)
@@ -34,7 +36,7 @@ class JobQueue:
         try:
             async with self._sem:
                 await self._handler(job, data)
-        except Exception:  # the handler owns error states; anything escaping is a bug worth a log
+        except Exception:
             log.exception("job.handler_crashed", job_id=job.job_id, doc_id=job.doc_id)
         finally:
             self._q.task_done()

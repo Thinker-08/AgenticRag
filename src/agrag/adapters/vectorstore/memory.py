@@ -49,11 +49,18 @@ class MemoryVectorStore:
         scored: list[ScoredChunk] = []
         for key, vec in self._dense.items():
             rec = self._rec[key]
-            if rec.chunk.tenant_id != tenant_id:               # mandatory tenant scoping (C31)
+            if rec.chunk.tenant_id != tenant_id:
                 continue
-            if not matches({**rec.chunk.extra_metadata,
-                            "page_no": rec.chunk.page_no, "kind": rec.chunk.kind,
-                            "doc_id": rec.chunk.doc_id, "lang": rec.chunk.lang}, filters):
+            if not matches(
+                {
+                    **rec.chunk.extra_metadata,
+                    "page_no": rec.chunk.page_no,
+                    "kind": rec.chunk.kind,
+                    "doc_id": rec.chunk.doc_id,
+                    "lang": rec.chunk.lang,
+                },
+                filters,
+            ):
                 continue
             dn = float(np.linalg.norm(vec)) or 1.0
             dense = float(np.dot(q, vec) / (qn * dn))
@@ -66,7 +73,11 @@ class MemoryVectorStore:
         return top
 
     async def delete_doc(self, doc_id: str, tenant_id: str) -> None:
-        drop = [k for k, r in self._rec.items() if r.chunk.doc_id == doc_id and r.chunk.tenant_id == tenant_id]
+        drop = [
+            k
+            for k, r in self._rec.items()
+            if r.chunk.doc_id == doc_id and r.chunk.tenant_id == tenant_id
+        ]
         for k in drop:
             self._dense.pop(k, None)
             self._sparse.pop(k, None)

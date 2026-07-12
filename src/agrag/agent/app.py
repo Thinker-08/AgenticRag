@@ -17,10 +17,11 @@ class AgentApp:
 
     def _budget(self, budget: Budget | None) -> Budget:
         agent_cfg = self.deps.settings.agent
-        return budget or Budget.start(agent_cfg.wall_clock_s, agent_cfg.token_budget, agent_cfg.max_iters)
+        return budget or Budget.start(
+            agent_cfg.wall_clock_s, agent_cfg.token_budget, agent_cfg.max_iters
+        )
 
     def _recursion_limit(self, budget: Budget) -> int:
-        # worst path ≈ 8 fixed nodes + 5 per corrective iteration; never below LangGraph's default
         return max(25, 12 + 5 * max(0, budget.iters_left))
 
     async def answer(
@@ -42,9 +43,12 @@ class AgentApp:
             "computations": [],
             "gaps": [],
         }
-        with self.deps.tracer.start_trace("answer", trace_id=trace_id, tenant_id=tenant_id, mode="agentic"):
+        with self.deps.tracer.start_trace(
+            "answer", trace_id=trace_id, tenant_id=tenant_id, mode="agentic"
+        ):
             final = await self.graph.app.ainvoke(
-                state, config={"recursion_limit": self._recursion_limit(resolved_budget)})
+                state, config={"recursion_limit": self._recursion_limit(resolved_budget)}
+            )
             answer = final["answer"]
             answer = await self._flag_still_indexing(answer, tenant_id)
         return answer

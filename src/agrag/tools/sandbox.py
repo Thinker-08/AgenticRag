@@ -20,10 +20,37 @@ from ..interfaces.types import ToolResult
 
 _ALLOWED_CALLS = {"abs", "min", "max", "round", "sum", "len", "float", "int", "pow"}
 _ALLOWED_NODES = (
-    ast.Module, ast.Expr, ast.Assign, ast.Name, ast.Load, ast.Store, ast.Constant,
-    ast.BinOp, ast.UnaryOp, ast.Add, ast.Sub, ast.Mult, ast.Div, ast.FloorDiv, ast.Mod,
-    ast.Pow, ast.USub, ast.UAdd, ast.Compare, ast.Lt, ast.Gt, ast.LtE, ast.GtE, ast.Eq,
-    ast.NotEq, ast.Call, ast.Tuple, ast.List, ast.Subscript, ast.Index, ast.Slice,
+    ast.Module,
+    ast.Expr,
+    ast.Assign,
+    ast.Name,
+    ast.Load,
+    ast.Store,
+    ast.Constant,
+    ast.BinOp,
+    ast.UnaryOp,
+    ast.Add,
+    ast.Sub,
+    ast.Mult,
+    ast.Div,
+    ast.FloorDiv,
+    ast.Mod,
+    ast.Pow,
+    ast.USub,
+    ast.UAdd,
+    ast.Compare,
+    ast.Lt,
+    ast.Gt,
+    ast.LtE,
+    ast.GtE,
+    ast.Eq,
+    ast.NotEq,
+    ast.Call,
+    ast.Tuple,
+    ast.List,
+    ast.Subscript,
+    ast.Index,
+    ast.Slice,
 )
 
 
@@ -73,27 +100,41 @@ class SubprocessSandbox:
             validate_code(code)
         except (ValueError, SyntaxError) as exc:
             return ToolResult(ok=False, error=f"validation: {exc}", run_id=run_id)
-        runner = _RUNNER.format(cpu=int(timeout_s or self.timeout_s) + 1, mem=self.max_mem_mb * 1024 * 1024)
+        runner = _RUNNER.format(
+            cpu=int(timeout_s or self.timeout_s) + 1, mem=self.max_mem_mb * 1024 * 1024
+        )
         try:
             proc = subprocess.run(
                 [sys.executable, "-I", "-c", runner],
                 input=json.dumps({"code": code, "inputs": inputs}),
-                capture_output=True, text=True, timeout=timeout_s or self.timeout_s,
+                capture_output=True,
+                text=True,
+                timeout=timeout_s or self.timeout_s,
                 env={"PATH": "/usr/bin"},
             )
         except subprocess.TimeoutExpired:
-            return ToolResult(ok=False, error="timeout", run_id=run_id,
-                              wall_ms=(time.monotonic() - t0) * 1000)
+            return ToolResult(
+                ok=False, error="timeout", run_id=run_id, wall_ms=(time.monotonic() - t0) * 1000
+            )
         wall = (time.monotonic() - t0) * 1000
         try:
             out = json.loads(proc.stdout.strip().splitlines()[-1])
         except (json.JSONDecodeError, IndexError):
-            return ToolResult(ok=False, error=proc.stderr.strip() or "no output", run_id=run_id, wall_ms=wall)
+            return ToolResult(
+                ok=False, error=proc.stderr.strip() or "no output", run_id=run_id, wall_ms=wall
+            )
         if not out.get("ok"):
-            return ToolResult(ok=False, error=out.get("error", "error"), run_id=run_id, stderr=proc.stderr, wall_ms=wall)
-        return ToolResult(ok=True, result=out.get("result"), run_id=run_id, stdout=proc.stdout, wall_ms=wall)
+            return ToolResult(
+                ok=False,
+                error=out.get("error", "error"),
+                run_id=run_id,
+                stderr=proc.stderr,
+                wall_ms=wall,
+            )
+        return ToolResult(
+            ok=True, result=out.get("result"), run_id=run_id, stdout=proc.stdout, wall_ms=wall
+        )
 
 
 def build_sandbox(cfg: SandboxConfig) -> SubprocessSandbox:
-    # gVisor/Docker wrap the SAME runner with stronger isolation at deploy time (08); interface is unchanged.
     return SubprocessSandbox(timeout_s=cfg.timeout_s, max_mem_mb=cfg.max_mem_mb)

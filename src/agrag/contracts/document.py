@@ -18,9 +18,9 @@ class JobState(str, Enum):
     EMBEDDING = "embedding"
     INDEXING = "indexing"
     READY = "ready"
-    FAILED = "failed"          # bad input, surfaced with reason
-    QUARANTINED = "quarantined"  # encrypted / suspected PDF-bomb
-    SUPERSEDED = "superseded"  # replaced by a re-upload of the edited doc (C17/C20)
+    FAILED = "failed"
+    QUARANTINED = "quarantined"
+    SUPERSEDED = "superseded"
 
 
 TERMINAL_STATES = {JobState.READY, JobState.FAILED, JobState.QUARANTINED, JobState.SUPERSEDED}
@@ -29,13 +29,13 @@ TERMINAL_STATES = {JobState.READY, JobState.FAILED, JobState.QUARANTINED, JobSta
 class Document(BaseModel):
     doc_id: str
     tenant_id: str
-    content_hash: str                       # dedup key: same file -> same doc, no re-ingest (C10)
+    content_hash: str
     filename: str = ""
     status: JobState = JobState.QUEUED
     page_count: int = 0
-    pages_done: int = 0                     # drives "indexing 340/1200" progress
-    created_at: str = ""                    # ISO-8601 UTC
-    indexed_at: Optional[str] = None        # set when ALL chunks committed -> read-your-writes (C16)
+    pages_done: int = 0
+    created_at: str = ""
+    indexed_at: Optional[str] = None
     embedding_model: str = ""
     embedding_version: str = ""
     error: Optional[str] = None
@@ -60,9 +60,10 @@ class Job(BaseModel):
 
 class JobHandle(BaseModel):
     """Non-blocking submit result (HTTP 202)."""
+
     doc_id: str
     job_id: Optional[str] = None
-    status: str = "queued"      # "queued" | "ready"
+    status: str = "queued"
     deduped: bool = False
 
 

@@ -1,12 +1,8 @@
-# agrag — dev + ops shortcuts. `make` (or `make help`) lists targets.
-# Everything runs inside the project venv at ./.venv (never the system Python).
-
 PY        := .venv/bin/python
 PIP       := .venv/bin/pip
 AGRAG     := .venv/bin/agrag
 UVICORN   := .venv/bin/uvicorn
 
-# Overridable on the CLI: `make ingest DOC=data/report.pdf`, `make ask Q="..."`.
 DOC       ?= data/sample.txt
 Q         ?= What is this document about?
 TENANT    ?= default

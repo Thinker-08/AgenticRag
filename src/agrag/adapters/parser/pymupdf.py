@@ -97,7 +97,6 @@ class PymupdfParser:
             doc_summary=summary,
         )
 
-
     def _process_page(self, doc, i: int, doc_id: str) -> tuple[Page, bytes | None]:
         page = doc[i]
         rect = page.rect
@@ -179,7 +178,6 @@ class PymupdfParser:
             page.blocks = [self._single_block(doc_id, i, text, (0.0, 0.0, page.width, page.height))]
         return page
 
-
     def _extract_tables(self, data: bytes, doc_id: str) -> dict[int, list[Table]]:
         if self._pdfplumber is None:
             return {}
@@ -222,7 +220,6 @@ class PymupdfParser:
                 )
             )
 
-
     def _order_blocks(self, page: Page) -> None:
         page.blocks.sort(key=lambda b: (self._col_bucket(b.bbox[0], page.width), b.bbox[1]))
         for order, b in enumerate(page.blocks):
@@ -247,7 +244,8 @@ class PymupdfParser:
             return
         for p in pages:
             p.blocks = [
-                b for b in p.blocks
+                b
+                for b in p.blocks
                 if b.type == BlockType.TABLE or self._boiler_key(b) not in boiler
             ]
             for order, b in enumerate(p.blocks):
@@ -256,14 +254,19 @@ class PymupdfParser:
     @staticmethod
     def _boiler_key(b: Block) -> tuple:
         norm = re.sub(r"\s+", " ", b.text.strip().lower())
-        return (round(b.bbox[0] / 2.0), round(b.bbox[1] / 2.0),
-                round(b.bbox[2] / 2.0), round(b.bbox[3] / 2.0), norm)
+        return (
+            round(b.bbox[0] / 2.0),
+            round(b.bbox[1] / 2.0),
+            round(b.bbox[2] / 2.0),
+            round(b.bbox[3] / 2.0),
+            norm,
+        )
 
     def _clean(self, text: str) -> str:
         if self._ftfy is not None:
             text = self._ftfy.fix_text(text)
         text = unicodedata.normalize("NFKC", text)
-        text = re.sub(r"(\w)-\n(\w)", r"\1\2", text)          # de-hyphenate line breaks
+        text = re.sub(r"(\w)-\n(\w)", r"\1\2", text)
         return text
 
     def _detect_lang(self, text: str) -> str:

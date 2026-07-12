@@ -33,8 +33,14 @@ def _new_id() -> str:
 
 
 def abstain(trace_id: str, reason: str, *, gaps: list[str] | None = None) -> Answer:
-    return Answer(answer_id=_new_id(), trace_id=trace_id, status=AnswerStatus.ABSTAINED,
-                  answer_text=ABSTENTION_TEXT, abstention_reason=reason, gaps=gaps or [])
+    return Answer(
+        answer_id=_new_id(),
+        trace_id=trace_id,
+        status=AnswerStatus.ABSTAINED,
+        answer_text=ABSTENTION_TEXT,
+        abstention_reason=reason,
+        gaps=gaps or [],
+    )
 
 
 def _render(intent: Intent, claims: list[Claim], comps: list[Computation]) -> str:
@@ -70,8 +76,12 @@ def build_answer(
     dropped = len(claims) - len(supported)
     status = AnswerStatus.PARTIAL if (gaps or dropped > 0) else AnswerStatus.ANSWERED
     return Answer(
-        answer_id=_new_id(), trace_id=trace_id, status=status,
+        answer_id=_new_id(),
+        trace_id=trace_id,
+        status=status,
         format=_FORMAT.get(intent, AnswerFormat.PROSE),
         answer_text=_render(intent, supported, computations),
-        claims=supported, computations=computations, gaps=gaps,
+        claims=supported,
+        computations=computations,
+        gaps=gaps,
     )

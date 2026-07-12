@@ -7,9 +7,9 @@ from ...contracts import Chunk, Document
 
 class MemoryDocStore:
     def __init__(self) -> None:
-        self._docs: dict[tuple[str, str], Document] = {}          # (tenant, doc_id)
-        self._by_hash: dict[tuple[str, str], str] = {}            # (tenant, hash) -> doc_id
-        self._chunks: dict[tuple[str, str], Chunk] = {}           # (tenant, chunk_id)
+        self._docs: dict[tuple[str, str], Document] = {}
+        self._by_hash: dict[tuple[str, str], str] = {}
+        self._chunks: dict[tuple[str, str], Chunk] = {}
 
     async def get_by_hash(self, tenant_id: str, content_hash: str) -> Document | None:
         doc_id = self._by_hash.get((tenant_id, content_hash))

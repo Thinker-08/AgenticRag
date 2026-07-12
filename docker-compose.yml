@@ -1,13 +1,3 @@
-# Full self-hosted stack for agrag (config/full.yaml):
-#   Ollama (LLM) + Qdrant (vectors) + Redis (cache) + Langfuse (tracing, self-host) + the app.
-#
-#   cp .env.example .env      # then edit secrets
-#   docker compose up -d
-#   make pull-models          # first run: pull gemma3:12b + gemma3:4b into the ollama volume
-#
-# Every value below has a safe placeholder default; override via .env. Secrets are placeholders,
-# NOT production credentials — change them before exposing any port off localhost.
-
 name: agrag
 
 networks:
@@ -21,7 +11,6 @@ volumes:
   langfuse-db-data:
 
 services:
-  # --- LLM serving -----------------------------------------------------------
   ollama:
     image: ollama/ollama:latest
     restart: unless-stopped
@@ -30,17 +19,8 @@ services:
     volumes:
       - ollama-models:/root/.ollama
     environment:
-      # Concurrent generation slots — must track agent.slot_concurrency in full.yaml (C8).
       OLLAMA_NUM_PARALLEL: "${OLLAMA_NUM_PARALLEL:-4}"
       OLLAMA_KEEP_ALIVE: "${OLLAMA_KEEP_ALIVE:-30m}"
-    # Uncomment to expose an NVIDIA GPU (needs nvidia-container-toolkit on the host):
-    # deploy:
-    #   resources:
-    #     reservations:
-    #       devices:
-    #         - driver: nvidia
-    #           count: all
-    #           capabilities: [gpu]
     healthcheck:
       test: ["CMD", "ollama", "list"]
       interval: 15s
@@ -49,22 +29,18 @@ services:
       start_period: 30s
     networks: [agrag]
 
-  # --- Vector database -------------------------------------------------------
   qdrant:
     image: qdrant/qdrant:latest
     restart: unless-stopped
     ports:
-      - "${QDRANT_HTTP_PORT:-6333}:6333"   # REST + dashboard
-      - "${QDRANT_GRPC_PORT:-6334}:6334"   # gRPC
+      - "${QDRANT_HTTP_PORT:-6333}:6333"
+      - "${QDRANT_GRPC_PORT:-6334}:6334"
     volumes:
       - qdrant-data:/qdrant/storage
     environment:
       QDRANT__LOG_LEVEL: "${QDRANT_LOG_LEVEL:-INFO}"
-    # The qdrant image ships no shell HTTP client, so the app depends on it with
-    # `service_started` rather than `service_healthy`; the client retries on connect.
     networks: [agrag]
 
-  # --- Cache / single-flight / semantic cache --------------------------------
   redis:
     image: redis:7-alpine
     restart: unless-stopped
@@ -81,7 +57,6 @@ services:
       start_period: 5s
     networks: [agrag]
 
-  # --- Tracing (self-host Langfuse) -----------------------------------------
   langfuse-db:
     image: postgres:16
     restart: unless-stopped
@@ -100,8 +75,6 @@ services:
     networks: [agrag]
 
   langfuse:
-    # NOTE: `:latest` (Langfuse v3) also wants ClickHouse + S3/MinIO. For this single-Postgres
-    # topology pin the v2 line: set LANGFUSE_IMAGE=langfuse/langfuse:2 in .env.
     image: "${LANGFUSE_IMAGE:-langfuse/langfuse:latest}"
     restart: unless-stopped
     depends_on:
@@ -117,7 +90,6 @@ services:
       ENCRYPTION_KEY: "${LANGFUSE_ENCRYPTION_KEY:-0000000000000000000000000000000000000000000000000000000000000000}"
       TELEMETRY_ENABLED: "false"
       LANGFUSE_ENABLE_EXPERIMENTAL_FEATURES: "false"
-      # Bootstrap an org/project + API keys on first boot so the app's keys resolve out of the box.
       LANGFUSE_INIT_ORG_ID: "agrag"
       LANGFUSE_INIT_PROJECT_ID: "agrag"
       LANGFUSE_INIT_PROJECT_PUBLIC_KEY: "${LANGFUSE_PUBLIC_KEY:-pk-lf-0000000000000000000000000000000000000000}"
@@ -126,7 +98,6 @@ services:
       LANGFUSE_INIT_USER_PASSWORD: "${LANGFUSE_INIT_USER_PASSWORD:-changeme-password}"
     networks: [agrag]
 
-  # --- The agrag API (agentic FSM or vanilla control, chosen by config) ------
   app:
     build:
       context: .
@@ -146,14 +117,12 @@ services:
     environment:
       AGRAG_CONFIG: "${AGRAG_CONFIG:-config/full.yaml}"
       AGRAG_MODE: "${AGRAG_MODE:-full}"
-      # In-container service DNS overrides the localhost hosts baked into full.yaml (AGRAG_<SECTION>_<FIELD>).
       AGRAG_LLM_HOST: "http://ollama:11434"
       AGRAG_VECTORSTORE_HOST: "http://qdrant:6333"
       AGRAG_CACHE_HOST: "redis://redis:6379/0"
       AGRAG_TRACER_HOST: "http://langfuse:3000"
       AGRAG_LLM_MODEL: "${LLM_MODEL:-gemma3:12b}"
       AGRAG_LLM_SMALL_MODEL: "${SMALL_MODEL:-gemma3:4b}"
-      # Langfuse SDK credentials (read by the langfuse tracer adapter).
       LANGFUSE_HOST: "http://langfuse:3000"
       LANGFUSE_PUBLIC_KEY: "${LANGFUSE_PUBLIC_KEY:-pk-lf-0000000000000000000000000000000000000000}"
       LANGFUSE_SECRET_KEY: "${LANGFUSE_SECRET_KEY:-sk-lf-0000000000000000000000000000000000000000}"

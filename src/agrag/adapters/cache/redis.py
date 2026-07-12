@@ -55,13 +55,11 @@ class RedisCache:
                     return value
                 finally:
                     await self._redis.delete(lock_key)
-            # someone else holds the lock: wait, then read their result
             await asyncio.sleep(_POLL_INTERVAL_S)
             cached = await self.get(key)
             if cached is not None:
                 return cached
 
-        # lock never freed in time: compute rather than block forever
         value = await compute()
         await self.set(key, value, ttl_s)
         return value

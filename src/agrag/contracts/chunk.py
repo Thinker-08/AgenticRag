@@ -15,7 +15,7 @@ class ChunkKind(str, Enum):
     EQUATION = "equation"
     LIST = "list"
     CODE = "code"
-    SUMMARY = "summary"       # RAPTOR node
+    SUMMARY = "summary"
 
 
 class Chunk(BaseModel):
@@ -23,22 +23,22 @@ class Chunk(BaseModel):
 
     chunk_id: str
     doc_id: str
-    tenant_id: str                                    # HARD isolation key, enforced at query layer (C31)
+    tenant_id: str
     page_no: int
     bbox: tuple[float, float, float, float] = (0.0, 0.0, 0.0, 0.0)
     section_breadcrumb: list[str] = Field(default_factory=list)
     kind: ChunkKind = ChunkKind.PROSE
     atomic: bool = False
-    text: str                                         # human/LLM-facing rendering; normalized source of truth for spans
-    linearized_text: str = ""                         # flattened form for embedding + BM25
-    context_blurb: str = ""                           # contextual-retrieval situating sentence
-    parent_id: Optional[str] = None                   # small-to-big
-    linked_block: Optional[str] = None                # FK to structured table/figure object
-    embedding_model: str = ""                         # --- CONTRACT (C3)
-    embedding_version: str = ""                       # --- CONTRACT (C3)
-    content_hash: str = ""                            # sha256(normalized span) --- idempotency/invalidation
-    lang: str = "en"                                  # BCP-47
-    extra_metadata: dict = Field(default_factory=dict)  # dates, doc_type, fiscal_year, numeric spans
+    text: str
+    linearized_text: str = ""
+    context_blurb: str = ""
+    parent_id: Optional[str] = None
+    linked_block: Optional[str] = None
+    embedding_model: str = ""
+    embedding_version: str = ""
+    content_hash: str = ""
+    lang: str = "en"
+    extra_metadata: dict = Field(default_factory=dict)
 
     def embed_input(self) -> str:
         body = self.linearized_text or self.text

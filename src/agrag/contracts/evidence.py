@@ -9,6 +9,7 @@ from .chunk import Chunk
 
 class ScoredChunk(BaseModel):
     """A retrieved candidate with per-stage scores, before it becomes a Citation."""
+
     chunk: Chunk
     score: float = 0.0
     dense_rank: int | None = None
@@ -22,15 +23,16 @@ class Citation(BaseModel):
     doc_id: str
     page_no: int
     char_span: tuple[int, int] = (0, 0)
-    quote: str = ""             # exact substring of the NORMALIZED chunk text
+    quote: str = ""
     score: float = 0.0
     why_relevant: str = ""
 
 
 class Evidence(BaseModel):
     """Frozen bundle handed to generation: deduped, reranked, tenant-scoped."""
+
     scored: list[ScoredChunk] = Field(default_factory=list)
-    gaps: list[str] = Field(default_factory=list)   # sub-questions with no sufficient evidence
+    gaps: list[str] = Field(default_factory=list)
 
     @property
     def ids(self) -> set[str]:

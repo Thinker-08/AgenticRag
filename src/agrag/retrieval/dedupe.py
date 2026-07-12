@@ -20,7 +20,7 @@ def _shingles(text: str, n: int = 3) -> set[str]:
     toks = _WORD.findall(text.lower())
     if len(toks) < n:
         return set(toks)
-    return {" ".join(toks[i:i + n]) for i in range(len(toks) - n + 1)}
+    return {" ".join(toks[i : i + n]) for i in range(len(toks) - n + 1)}
 
 
 def _minhash(text: str, num_perm: int = 64) -> MinHash:

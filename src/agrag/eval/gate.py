@@ -8,9 +8,6 @@ back to the committed floor when the control lacks it.
 
 from __future__ import annotations
 
-# Committed step-1 control floors (illustrative — design 13/09; replace with the real
-# frozen Milestone-1 measurements). These are the fallback floors when the passed control
-# dict omits a metric; the live gate floor is control[metric] itself.
 locked_floors: dict[str, float] = {
     "faithfulness": 0.74,
     "token_f1": 0.41,
@@ -20,7 +17,6 @@ locked_floors: dict[str, float] = {
     "correct_refusal": 0.12,
 }
 
-# Per-metric noise band (design 09 §3): a drop within tolerance is not a regression.
 DEFAULT_TOL: dict[str, float] = {
     "faithfulness": 0.01,
     "token_f1": 0.01,

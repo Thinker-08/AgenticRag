@@ -1,5 +1,3 @@
-# Full self-hosted stack: Ollama + Qdrant + Redis + BGE-M3 + BGE-reranker + NLI verifier + Langfuse.
-# Requires `pip install -e '.[ml,pdf,stores,obs]'` and the docker-compose services running.
 mode: full
 agent_mode: agentic
 data_dir: ./data

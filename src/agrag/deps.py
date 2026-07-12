@@ -30,8 +30,8 @@ from .interfaces import (
 @dataclass
 class Deps:
     settings: Settings
-    llm: LLM                      # 12B generator/verifier tier
-    small_llm: LLM                # cheap cascade tier (route/grade/reformulate)
+    llm: LLM
+    small_llm: LLM
     embedding: EmbeddingModel
     vectorstore: VectorStore
     lexical: LexicalIndex
@@ -44,4 +44,4 @@ class Deps:
     parser: Parser
     chunker: Chunker
     toolrunner: ToolRunner
-    retriever: Retriever          # composed hybrid pipeline over vectorstore + lexical + reranker
+    retriever: Retriever

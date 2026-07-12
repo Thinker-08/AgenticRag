@@ -32,9 +32,9 @@ class BgeReranker:
             try:
                 from sentence_transformers import CrossEncoder
             except ImportError as e:
-                raise ImportError(
-                    "BgeReranker needs the 'ml' extra: pip install -e '.[ml]'"
-                ) from (flag_err or e)
+                raise ImportError("BgeReranker needs the 'ml' extra: pip install -e '.[ml]'") from (
+                    flag_err or e
+                )
             self._cross = CrossEncoder(model, device=device)
 
     async def rerank(

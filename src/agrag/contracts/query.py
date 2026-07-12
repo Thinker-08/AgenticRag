@@ -29,6 +29,7 @@ class Strategy(str, Enum):
 
 class Route(BaseModel):
     """Router output: intent + retrieve/skip decision, one constrained-JSON call."""
+
     intent: Intent
     needs_retrieval: bool
     history_answerable: bool = False
@@ -48,19 +49,20 @@ class QueryPlan(BaseModel):
     trace_id: str = ""
     intent: Intent = Intent.FACTOID
     sub_steps: list[SubStep]
-    merge: str = "concat"      # "concat" | "compare" | "aggregate"
+    merge: str = "concat"
     token_budget: int = 0
 
 
 class GradeVerdict(str, Enum):
     SUFFICIENT = "SUFFICIENT"
-    AMBIGUOUS = "AMBIGUOUS"    # relevant but a slot is uncovered -> targeted reformulate
-    IRRELEVANT = "IRRELEVANT"  # below relevance floor -> switch strategy
-    EXHAUSTED = "EXHAUSTED"    # iters/budget spent -> gap
+    AMBIGUOUS = "AMBIGUOUS"
+    IRRELEVANT = "IRRELEVANT"
+    EXHAUSTED = "EXHAUSTED"
 
 
 class Grade(BaseModel):
     """CRAG grader output: relevance + slot-sufficiency kept separate (05 §5)."""
+
     verdict: GradeVerdict
     max_relevance: float = 0.0
     covered_slots: list[str] = Field(default_factory=list)
