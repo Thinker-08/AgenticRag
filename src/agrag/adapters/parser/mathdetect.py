@@ -8,7 +8,7 @@ _WORD = re.compile(r"[A-Za-z]{3,}")
 _ASSIGN = re.compile(r"^[A-Za-z_][\w ]{0,30}=\s*[^=].*[-+*/^()].*$")
 
 
-def looks_like_equation(text: str) -> bool:
+def looksLikeEquation(text: str) -> bool:
     s = text.strip()
     if len(s) < 6 or len(s) > 600 or "\n" in s:
         return False
@@ -18,6 +18,7 @@ def looks_like_equation(text: str) -> bool:
         return False
     if _ASSIGN.match(s) and len(_WORD.findall(s)) <= 8:
         return True
+
     mathy = sum(1 for ch in s if ch in _MATH_CHARS or ch.isdigit())
     words = len(_WORD.findall(s))
     return mathy / len(s) > 0.3 and words <= 4

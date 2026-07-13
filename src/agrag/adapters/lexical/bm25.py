@@ -12,7 +12,7 @@ from ..vectorstore.filters import matches
 _TOKEN = re.compile(r"[a-z0-9][a-z0-9\-_.]*")
 
 
-def _tokenize(text: str) -> list[str]:
+def tokenize(text: str) -> list[str]:
     return _TOKEN.findall(text.lower())
 
 
@@ -34,39 +34,32 @@ class Bm25Index:
     def _model(self, tenant_id: str):
         if tenant_id in self._dirty or tenant_id not in self._models:
             chunks = list(self._chunks.get(tenant_id, []))
-            corpus = [_tokenize(c.linearized_text or c.text) for c in chunks]
-            self._models[tenant_id] = (
-                BM25Okapi(corpus, k1=self.k1, b=self.b) if corpus else None,
-                chunks,
-            )
+            corpus = [tokenize(c.linearized_text or c.text) for c in chunks]
+            self._models[tenant_id] = (BM25Okapi(corpus, k1=self.k1, b=self.b) if corpus else None, chunks)
             self._dirty.discard(tenant_id)
+
         return self._models[tenant_id]
 
-    async def search(
-        self, query: str, *, tenant_id: str, top_k: int = 100, filters: dict | None = None
-    ) -> list[ScoredChunk]:
+    async def search(self, query: str, *, tenant_id: str, top_k: int = 100, filters: dict | None = None) -> list[ScoredChunk]:
         model, chunks = await asyncio.to_thread(self._model, tenant_id)
         if not model or not chunks:
             return []
-        scores = await asyncio.to_thread(model.get_scores, _tokenize(query))
+
+        scores = await asyncio.to_thread(model.get_scores, tokenize(query))
         ranked = sorted(zip(chunks, scores), key=lambda p: p[1], reverse=True)
+
         out: list[ScoredChunk] = []
         for c, s in ranked:
-            meta = {
-                **c.extra_metadata,
-                "page_no": c.page_no,
-                "kind": c.kind,
-                "doc_id": c.doc_id,
-                "lang": c.lang,
-            }
+            meta = {**c.extra_metadata, "page_no": c.page_no, "kind": c.kind, "doc_id": c.doc_id, "lang": c.lang}
             if not matches(meta, filters):
                 continue
             out.append(ScoredChunk(chunk=c, score=float(s), bm25_rank=len(out)))
             if len(out) >= top_k:
                 break
+
         return out
 
-    async def delete_doc(self, doc_id: str, tenant_id: str) -> None:
+    async def deleteDoc(self, doc_id: str, tenant_id: str) -> None:
         bucket = self._chunks.get(tenant_id, [])
         bucket[:] = [c for c in bucket if c.doc_id != doc_id]
         self._dirty.add(tenant_id)

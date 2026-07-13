@@ -6,9 +6,7 @@ from ..contracts import Block, BlockType, ParsedDoc
 
 _FOOTNOTE_DEF = re.compile(r"^\[(\d{1,2})\][.):]?\s+(\S.+)", re.DOTALL)
 _FOOTNOTE_REF = re.compile(r"\[(\d{1,2})\]")
-_FIG_TABLE_REF = re.compile(
-    r"\b(?:see\s+)?(Figure|Fig\.?|Table|Exhibit)\s+(\d{1,3})\b", re.IGNORECASE
-)
+_FIG_TABLE_REF = re.compile(r"\b(?:see\s+)?(Figure|Fig\.?|Table|Exhibit)\s+(\d{1,3})\b", re.IGNORECASE)
 _SECTION_REF = re.compile(r"(?:§|\bsection\s+)(\d+(?:\.\d+)*)", re.IGNORECASE)
 _CAPTION = re.compile(r"^(Figure|Fig\.?|Table|Exhibit)\s+(\d{1,3})\b", re.IGNORECASE)
 _HEADING_NUM = re.compile(r"^(\d+(?:\.\d+)*)[.)]?\s+\S")
@@ -16,12 +14,12 @@ _HEADING_NUM = re.compile(r"^(\d+(?:\.\d+)*)[.)]?\s+\S")
 _MAX_INLINE_CHARS = 300
 
 
-def _norm_kind(word: str) -> str:
+def normKind(word: str) -> str:
     w = word.lower().rstrip(".")
     return "figure" if w in ("figure", "fig") else w
 
 
-def link_crossrefs(doc: ParsedDoc) -> None:
+def linkCrossrefs(doc: ParsedDoc) -> None:
     blocks: list[Block] = [b for p in doc.pages for b in p.blocks]
     if not blocks:
         return
@@ -33,9 +31,11 @@ def link_crossrefs(doc: ParsedDoc) -> None:
         m = _FOOTNOTE_DEF.match(text)
         if m and len(text) <= 500 and b.type in (BlockType.PARAGRAPH, BlockType.FOOTER):
             footnote_defs.setdefault(m.group(1), b)
+
         m = _CAPTION.match(text)
         if m:
-            targets.setdefault(f"{_norm_kind(m.group(1))} {m.group(2)}", b.block_id)
+            targets.setdefault(f"{normKind(m.group(1))} {m.group(2)}", b.block_id)
+
         m = _HEADING_NUM.match(text)
         if m and b.type == BlockType.TITLE:
             targets.setdefault(f"section {m.group(1)}", b.block_id)
@@ -58,7 +58,7 @@ def link_crossrefs(doc: ParsedDoc) -> None:
                 inlined.add(num)
 
         for m in _FIG_TABLE_REF.finditer(b.text):
-            key = f"{_norm_kind(m.group(1))} {m.group(2)}"
+            key = f"{normKind(m.group(1))} {m.group(2)}"
             tid = targets.get(key)
             if tid and tid != b.block_id:
                 links.append(tid)

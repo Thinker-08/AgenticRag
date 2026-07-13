@@ -53,7 +53,7 @@ class Job(BaseModel):
     attempts: int = 0
     error: Optional[str] = None
 
-    def is_terminal(self) -> bool:
+    def isTerminal(self) -> bool:
         return self.state in TERMINAL_STATES
 
 

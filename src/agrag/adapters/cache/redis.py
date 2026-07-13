@@ -14,15 +14,14 @@ class RedisCache:
         try:
             import redis.asyncio as aioredis
         except ImportError as e:
-            raise ImportError(
-                "RedisCache needs the 'stores' extra: pip install -e '.[stores]'"
-            ) from e
+            raise ImportError("RedisCache needs the 'stores' extra: pip install -e '.[stores]'") from e
         self._redis = aioredis.from_url(host, decode_responses=True)
 
     async def get(self, key: str) -> Any | None:
         raw = await self._redis.get(key)
         if raw is None:
             return None
+
         try:
             return json.loads(raw)
         except (json.JSONDecodeError, TypeError):
@@ -35,9 +34,7 @@ class RedisCache:
     async def invalidate(self, key: str) -> None:
         await self._redis.delete(key)
 
-    async def get_or_compute(
-        self, key: str, compute: Callable[[], Awaitable[Any]], ttl_s: int | None = None
-    ) -> Any:
+    async def getOrCompute(self, key: str, compute: Callable[[], Awaitable[Any]], ttl_s: int | None = None) -> Any:
         cached = await self.get(key)
         if cached is not None:
             return cached
@@ -51,6 +48,7 @@ class RedisCache:
                     return value
                 finally:
                     await self._redis.delete(lock_key)
+
             await asyncio.sleep(_POLL_INTERVAL_S)
             cached = await self.get(key)
             if cached is not None:

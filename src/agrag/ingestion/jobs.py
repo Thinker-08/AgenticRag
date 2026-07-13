@@ -11,9 +11,7 @@ log = structlog.get_logger("agrag.jobs")
 
 
 class JobQueue:
-    def __init__(
-        self, handler: Callable[[Job, bytes], Awaitable[None]], concurrency: int = 2
-    ) -> None:
+    def __init__(self, handler: Callable[[Job, bytes], Awaitable[None]], concurrency: int = 2) -> None:
         self._handler = handler
         self._q: asyncio.Queue[tuple[Job, bytes]] = asyncio.Queue()
         self._sem = asyncio.Semaphore(concurrency)
@@ -21,12 +19,14 @@ class JobQueue:
 
     async def enqueue(self, job: Job, data: bytes) -> None:
         await self._q.put((job, data))
-        task = asyncio.create_task(self._drain_one())
+
+        task = asyncio.create_task(self.drainOne())
         self._tasks.add(task)
         task.add_done_callback(self._tasks.discard)
 
-    async def _drain_one(self) -> None:
+    async def drainOne(self) -> None:
         job, data = await self._q.get()
+
         try:
             async with self._sem:
                 await self._handler(job, data)

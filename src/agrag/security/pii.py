@@ -4,15 +4,14 @@ import re
 
 _EMAIL = re.compile(r"\b[\w.+-]+@[\w-]+\.[\w.-]{2,}\b")
 _SSN = re.compile(r"\b\d{3}-\d{2}-\d{4}\b")
-_PHONE = re.compile(
-    r"(?<![\d-])(?:\+?1[-.\s])?(?:\(\d{3}\)\s?|\d{3}[-.\s])\d{3}[-.\s]\d{4}(?![\d-])"
-)
+_PHONE = re.compile(r"(?<![\d-])(?:\+?1[-.\s])?(?:\(\d{3}\)\s?|\d{3}[-.\s])\d{3}[-.\s]\d{4}(?![\d-])")
 _CARD = re.compile(r"\b(?:\d[ -]?){13,19}\b")
 
 
-def _luhn_ok(digits: str) -> bool:
+def luhnOk(digits: str) -> bool:
     if not 13 <= len(digits) <= 19:
         return False
+
     total = 0
     for i, ch in enumerate(reversed(digits)):
         d = int(ch)
@@ -21,10 +20,11 @@ def _luhn_ok(digits: str) -> bool:
             if d > 9:
                 d -= 9
         total += d
+
     return total % 10 == 0
 
 
-def detect_pii(text: str) -> list[str]:
+def detectPii(text: str) -> list[str]:
     found: set[str] = set()
     if _EMAIL.search(text):
         found.add("email")
@@ -34,9 +34,10 @@ def detect_pii(text: str) -> list[str]:
         found.add("phone")
     for m in _CARD.finditer(text):
         digits = re.sub(r"[ -]", "", m.group())
-        if _luhn_ok(digits):
+        if luhnOk(digits):
             found.add("credit_card")
             break
+
     return sorted(found)
 
 
@@ -47,13 +48,12 @@ def scrub(text: str) -> str:
     text = _EMAIL.sub("[email]", text)
     text = _SSN.sub("[ssn]", text)
     text = _PHONE.sub("[phone]", text)
-    text = _CARD.sub(
-        lambda m: "[card]" if _luhn_ok(re.sub(r"[ -]", "", m.group())) else m.group(), text
-    )
+    text = _CARD.sub(lambda m: "[card]" if luhnOk(re.sub(r"[ -]", "", m.group())) else m.group(), text)
+
     return text
 
 
-def scrub_attrs(attrs: dict) -> dict:
+def scrubAttrs(attrs: dict) -> dict:
     out: dict = {}
     for k, v in attrs.items():
         if isinstance(v, str):
@@ -61,4 +61,5 @@ def scrub_attrs(attrs: dict) -> dict:
             out[k] = s if len(s) <= _MAX_ATTR else s[:_MAX_ATTR] + "…"
         else:
             out[k] = v
+
     return out

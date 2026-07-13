@@ -20,9 +20,7 @@ class BgeReranker:
             flag_err = e
         else:
             try:
-                self._reranker = FlagReranker(
-                    model, use_fp16=device.startswith("cuda"), device=device
-                )
+                self._reranker = FlagReranker(model, use_fp16=device.startswith("cuda"), device=device)
             except TypeError:
                 self._reranker = FlagReranker(model, use_fp16=device.startswith("cuda"))
 
@@ -30,19 +28,10 @@ class BgeReranker:
             try:
                 from sentence_transformers import CrossEncoder
             except ImportError as e:
-                raise ImportError("BgeReranker needs the 'ml' extra: pip install -e '.[ml]'") from (
-                    flag_err or e
-                )
+                raise ImportError("BgeReranker needs the 'ml' extra: pip install -e '.[ml]'") from (flag_err or e)
             self._cross = CrossEncoder(model, device=device)
 
-    async def rerank(
-        self,
-        query: str,
-        candidates: Sequence[ScoredChunk],
-        *,
-        top_k: int = 8,
-        budget: Budget | None = None,
-    ) -> list[ScoredChunk]:
+    async def rerank(self, query: str, candidates: Sequence[ScoredChunk], *, top_k: int = 8, budget: Budget | None = None) -> list[ScoredChunk]:
         cands = list(candidates)
         if not cands:
             return []
@@ -50,14 +39,15 @@ class BgeReranker:
             return cands[:top_k]
 
         pairs = [(query, sc.chunk.text) for sc in cands]
-        scores = await asyncio.to_thread(self._score, pairs)
+        scores = await asyncio.to_thread(self.score, pairs)
         for sc, s in zip(cands, scores):
             sc.rerank_score = float(s)
             sc.score = float(s)
+
         cands.sort(key=lambda sc: sc.rerank_score or 0.0, reverse=True)
         return cands[:top_k]
 
-    def _score(self, pairs: list[tuple[str, str]]) -> list[float]:
+    def score(self, pairs: list[tuple[str, str]]) -> list[float]:
         if self._reranker is not None:
             try:
                 out = self._reranker.compute_score(pairs, normalize=True)
@@ -66,5 +56,6 @@ class BgeReranker:
             if isinstance(out, (int, float)):
                 return [float(out)]
             return [float(x) for x in out]
+
         out = self._cross.predict(pairs)
         return [float(x) for x in out]

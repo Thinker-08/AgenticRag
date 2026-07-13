@@ -2,66 +2,37 @@ from __future__ import annotations
 
 from ..config import ChunkerConfig
 from ..contracts import Block, BlockType, Chunk, ChunkKind, ParsedDoc
-from .hashing import content_hash
+from .hashing import contentHash
 
 _ATOMIC = {BlockType.TABLE, BlockType.LIST, BlockType.EQUATION, BlockType.FIGURE}
-_KIND = {
-    BlockType.TABLE: ChunkKind.TABLE,
-    BlockType.LIST: ChunkKind.LIST,
-    BlockType.EQUATION: ChunkKind.EQUATION,
-    BlockType.FIGURE: ChunkKind.FIGURE,
-}
+_KIND = {BlockType.TABLE: ChunkKind.TABLE, BlockType.LIST: ChunkKind.LIST, BlockType.EQUATION: ChunkKind.EQUATION, BlockType.FIGURE: ChunkKind.FIGURE}
 
 
-def _mk_chunk(
-    doc: ParsedDoc,
-    cid: str,
-    text: str,
-    *,
-    page: int,
-    kind: ChunkKind,
-    block: Block | None,
-    parent_id: str | None,
-    is_parent: bool,
-    breadcrumb: list[str],
-    links: list[str] | None = None,
-) -> Chunk:
+def mkChunk(doc: ParsedDoc, cid: str, text: str, *, page: int, kind: ChunkKind, block: Block | None, parent_id: str | None, is_parent: bool, breadcrumb: list[str], links: list[str] | None = None) -> Chunk:
     crumb = (" › ".join(breadcrumb) + "\n") if breadcrumb else ""
     linearized = crumb + text
     meta = {**doc.extra_metadata, "is_parent": is_parent}
     all_links = sorted(set((links or []) + (block.links if block else [])))
+
     if all_links:
         meta["links"] = all_links
     if block and block.table and not block.table.checksum_ok:
         meta["low_confidence_table"] = True
-    return Chunk(
-        chunk_id=cid,
-        doc_id=doc.doc_id,
-        tenant_id=doc.tenant_id,
-        page_no=page,
-        bbox=block.bbox if block else (0, 0, 0, 0),
-        section_breadcrumb=list(breadcrumb),
-        kind=kind,
-        atomic=kind in {ChunkKind.TABLE, ChunkKind.LIST, ChunkKind.EQUATION, ChunkKind.FIGURE},
-        text=text,
-        linearized_text=linearized,
-        parent_id=parent_id,
-        linked_block=block.block_id if block and block.table else None,
-        content_hash=content_hash(text),
-        lang=block.lang if block else "en",
-        extra_metadata=meta,
-    )
+
+    return Chunk(chunk_id=cid, doc_id=doc.doc_id, tenant_id=doc.tenant_id, page_no=page, bbox=block.bbox if block else (0, 0, 0, 0), section_breadcrumb=list(breadcrumb), kind=kind, atomic=kind in {ChunkKind.TABLE, ChunkKind.LIST, ChunkKind.EQUATION, ChunkKind.FIGURE}, text=text, linearized_text=linearized, parent_id=parent_id, linked_block=block.block_id if block and block.table else None, content_hash=contentHash(text), lang=block.lang if block else "en", extra_metadata=meta)
 
 
-def _split_words(text: str, size: int, overlap: int) -> list[str]:
+def splitWords(text: str, size: int, overlap: int) -> list[str]:
     words = text.split()
     if len(words) <= size:
         return [text] if text.strip() else []
+
     out, i = [], 0
     step = max(1, size - overlap)
     while i < len(words):
         out.append(" ".join(words[i : i + size]))
         i += step
+
     return out
 
 
@@ -73,8 +44,8 @@ class HierarchicalChunker:
         self.parent = parent_size
         self.overlap = overlap
 
-    def _split_prose(self, body: str) -> list[str]:
-        return _split_words(body, self.child, self.overlap)
+    def splitProse(self, body: str) -> list[str]:
+        return splitWords(body, self.child, self.overlap)
 
     def split(self, doc: ParsedDoc) -> list[Chunk]:
         chunks: list[Chunk] = []
@@ -86,41 +57,17 @@ class HierarchicalChunker:
             nonlocal n, section, crumb
             if not section:
                 return
+
             page = section[0].page
             body = "\n".join(b.text for b in section)
             section_links = sorted({link for b in section for link in b.links})
             parent_id = f"{doc.doc_id}:p{page}:parent{n}"
-            chunks.append(
-                _mk_chunk(
-                    doc,
-                    parent_id,
-                    body[: self.parent * 6],
-                    page=page,
-                    kind=ChunkKind.PROSE,
-                    block=None,
-                    parent_id=None,
-                    is_parent=True,
-                    breadcrumb=list(crumb),
-                    links=section_links,
-                )
-            )
+            chunks.append(mkChunk(doc, parent_id, body[: self.parent * 6], page=page, kind=ChunkKind.PROSE, block=None, parent_id=None, is_parent=True, breadcrumb=list(crumb), links=section_links))
             n += 1
-            for piece in self._split_prose(body):
+
+            for piece in self.splitProse(body):
                 cid = f"{doc.doc_id}:p{page}:c{n}"
-                chunks.append(
-                    _mk_chunk(
-                        doc,
-                        cid,
-                        piece,
-                        page=page,
-                        kind=ChunkKind.PROSE,
-                        block=None,
-                        parent_id=parent_id,
-                        is_parent=False,
-                        breadcrumb=list(crumb),
-                        links=section_links,
-                    )
-                )
+                chunks.append(mkChunk(doc, cid, piece, page=page, kind=ChunkKind.PROSE, block=None, parent_id=parent_id, is_parent=False, breadcrumb=list(crumb), links=section_links))
                 n += 1
             section = []
 
@@ -130,28 +77,20 @@ class HierarchicalChunker:
                     flush()
                     crumb = list(block.breadcrumb) or [block.text]
                     continue
+
                 if block.type in (BlockType.HEADER, BlockType.FOOTER, BlockType.CAPTION):
                     continue
+
                 if block.type in _ATOMIC:
                     flush()
                     cid = f"{doc.doc_id}:p{block.page}:c{n}"
-                    chunks.append(
-                        _mk_chunk(
-                            doc,
-                            cid,
-                            block.text,
-                            page=block.page,
-                            kind=_KIND[block.type],
-                            block=block,
-                            parent_id=None,
-                            is_parent=False,
-                            breadcrumb=block.breadcrumb or crumb,
-                        )
-                    )
+                    chunks.append(mkChunk(doc, cid, block.text, page=block.page, kind=_KIND[block.type], block=block, parent_id=None, is_parent=False, breadcrumb=block.breadcrumb or crumb))
                     n += 1
                 else:
                     section.append(block)
+
             flush()
+
         return chunks
 
 
@@ -165,38 +104,26 @@ class RecursiveChunker:
     def split(self, doc: ParsedDoc) -> list[Chunk]:
         chunks: list[Chunk] = []
         n = 0
+
         for page in doc.pages:
             text = "\n".join(b.text for b in sorted(page.blocks, key=lambda b: b.reading_order))
-            for piece in _split_words(text, self.size, self.overlap):
+            for piece in splitWords(text, self.size, self.overlap):
                 cid = f"{doc.doc_id}:p{page.page_no}:c{n}"
-                chunks.append(
-                    Chunk(
-                        chunk_id=cid,
-                        doc_id=doc.doc_id,
-                        tenant_id=doc.tenant_id,
-                        page_no=page.page_no,
-                        kind=ChunkKind.PROSE,
-                        text=piece,
-                        linearized_text=piece,
-                        content_hash=content_hash(piece),
-                        extra_metadata={**doc.extra_metadata, "is_parent": False},
-                    )
-                )
+                chunks.append(Chunk(chunk_id=cid, doc_id=doc.doc_id, tenant_id=doc.tenant_id, page_no=page.page_no, kind=ChunkKind.PROSE, text=piece, linearized_text=piece, content_hash=contentHash(piece), extra_metadata={**doc.extra_metadata, "is_parent": False}))
                 n += 1
+
         return chunks
 
 
 class SemanticChunker(HierarchicalChunker):
     name = "semantic"
 
-    def __init__(
-        self, embedder, *, breakpoint_pctl: int = 90, child_size: int = 320, parent_size: int = 1500
-    ) -> None:
+    def __init__(self, embedder, *, breakpoint_pctl: int = 90, child_size: int = 320, parent_size: int = 1500) -> None:
         super().__init__(child_size=child_size, parent_size=parent_size, overlap=0)
         self._embed = embedder
         self._pctl = breakpoint_pctl
 
-    def _split_prose(self, body: str) -> list[str]:
+    def splitProse(self, body: str) -> list[str]:
         import numpy as np
 
         from ..promptfmt import sentences
@@ -204,27 +131,28 @@ class SemanticChunker(HierarchicalChunker):
         sents = sentences(body)
         if len(sents) <= 2:
             return [body] if body.strip() else []
-        vecs = np.asarray(self._embed.encode_documents(sents).dense, dtype=np.float32)
+
+        vecs = np.asarray(self._embed.encodeDocuments(sents).dense, dtype=np.float32)
         norms = np.clip(np.linalg.norm(vecs, axis=1), 1e-8, None)
         unit = vecs / norms[:, None]
         sims = np.array([float(unit[i] @ unit[i + 1]) for i in range(len(sents) - 1)])
         thresh = float(np.percentile(-sims, self._pctl)) if len(sims) else 0.0
+
         segments, cur = [], [sents[0]]
         for i in range(len(sims)):
             if -sims[i] >= thresh and len(" ".join(cur)) > self.child:
                 segments.append(" ".join(cur))
                 cur = []
             cur.append(sents[i + 1])
+
         if cur:
             segments.append(" ".join(cur))
         return segments
 
 
-def build_chunker(cfg: ChunkerConfig, embedder=None):
+def buildChunker(cfg: ChunkerConfig, embedder=None):
     if cfg.provider == "recursive":
         return RecursiveChunker(size=512, overlap=77)
     if cfg.provider == "semantic" and embedder is not None:
         return SemanticChunker(embedder, child_size=cfg.child_size, parent_size=cfg.parent_size)
-    return HierarchicalChunker(
-        child_size=cfg.child_size, parent_size=cfg.parent_size, overlap=cfg.overlap
-    )
+    return HierarchicalChunker(child_size=cfg.child_size, parent_size=cfg.parent_size, overlap=cfg.overlap)

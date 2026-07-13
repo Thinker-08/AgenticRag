@@ -20,24 +20,19 @@ class LangfuseTracer:
             _log.warning("Langfuse unavailable; tracing disabled: %s", e)
 
     @contextlib.contextmanager
-    def start_trace(
-        self, name: str, *, trace_id: str, tenant_id: str, **attrs
-    ) -> AbstractContextManager:
+    def startTrace(self, name: str, *, trace_id: str, tenant_id: str, **attrs) -> AbstractContextManager:
         if self._client is None:
             yield None
             return
+
         handle = None
         token = None
         try:
-            handle = self._client.trace(
-                id=trace_id,
-                name=name,
-                user_id=tenant_id,
-                metadata={"tenant_id": tenant_id, **attrs},
-            )
+            handle = self._client.trace(id=trace_id, name=name, user_id=tenant_id, metadata={"tenant_id": tenant_id, **attrs})
             token = _current.set(handle)
         except Exception as e:
             _log.debug("start_trace failed: %s", e)
+
         try:
             yield handle
         finally:
@@ -54,6 +49,7 @@ class LangfuseTracer:
         if self._client is None or parent is None:
             yield None
             return
+
         handle = None
         token = None
         try:
@@ -61,6 +57,7 @@ class LangfuseTracer:
             token = _current.set(handle)
         except Exception as e:
             _log.debug("span failed: %s", e)
+
         try:
             yield handle
         finally:
@@ -73,12 +70,13 @@ class LangfuseTracer:
                 pass
 
     def event(self, name: str, **attrs) -> None:
-        from ...security.pii import scrub_attrs
+        from ...security.pii import scrubAttrs
 
         parent = _current.get()
         if self._client is None or parent is None:
             return
+
         try:
-            parent.event(name=name, metadata=scrub_attrs(attrs))
+            parent.event(name=name, metadata=scrubAttrs(attrs))
         except Exception as e:
             _log.debug("event failed: %s", e)

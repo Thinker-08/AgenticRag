@@ -13,28 +13,9 @@ T = TypeVar("T", bound=BaseModel)
 class LLM(Protocol):
     name: str
 
-    async def generate(
-        self,
-        prompt: str,
-        *,
-        system: str | None = None,
-        max_tokens: int = 512,
-        temperature: float = 0.0,
-        images: Sequence[bytes] | None = None,
-        timeout_s: float | None = None,
-    ) -> LLMResult: ...
+    async def generate(self, prompt: str, *, system: str | None = None, max_tokens: int = 512, temperature: float = 0.0, images: Sequence[bytes] | None = None, timeout_s: float | None = None) -> LLMResult: ...
 
-    async def generate_structured(
-        self,
-        prompt: str,
-        schema: Type[T],
-        *,
-        system: str | None = None,
-        max_tokens: int = 512,
-        temperature: float = 0.0,
-        images: Sequence[bytes] | None = None,
-        timeout_s: float | None = None,
-    ) -> tuple[T, LLMResult]: ...
+    async def generateStructured(self, prompt: str, schema: Type[T], *, system: str | None = None, max_tokens: int = 512, temperature: float = 0.0, images: Sequence[bytes] | None = None, timeout_s: float | None = None) -> tuple[T, LLMResult]: ...
 
 
 @runtime_checkable
@@ -43,6 +24,6 @@ class EmbeddingModel(Protocol):
     version: str
     dim: int
 
-    def encode_documents(self, texts: Sequence[str]) -> EmbeddingResult: ...
+    def encodeDocuments(self, texts: Sequence[str]) -> EmbeddingResult: ...
 
-    def encode_queries(self, texts: Sequence[str]) -> EmbeddingResult: ...
+    def encodeQueries(self, texts: Sequence[str]) -> EmbeddingResult: ...

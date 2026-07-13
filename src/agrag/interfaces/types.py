@@ -15,7 +15,7 @@ class LLMResult:
     model: str = ""
 
     @property
-    def total_tokens(self) -> int:
+    def totalTokens(self) -> int:
         return self.prompt_tokens + self.completion_tokens
 
 

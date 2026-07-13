@@ -16,13 +16,13 @@ class OtelTracer:
             from opentelemetry.sdk.trace import TracerProvider
 
             provider = TracerProvider(resource=Resource.create({"service.name": "agrag"}))
-            self._maybe_add_otlp(provider, host)
+            self.maybeAddOtlp(provider, host)
             trace.set_tracer_provider(provider)
             self._tracer = trace.get_tracer("agrag")
         except Exception:
             self._tracer = None
 
-    def _maybe_add_otlp(self, provider, host: str) -> None:
+    def maybeAddOtlp(self, provider, host: str) -> None:
         try:
             from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
             from opentelemetry.sdk.trace.export import BatchSpanProcessor
@@ -33,17 +33,17 @@ class OtelTracer:
             pass
 
     @contextlib.contextmanager
-    def start_trace(
-        self, name: str, *, trace_id: str, tenant_id: str, **attrs
-    ) -> AbstractContextManager:
+    def startTrace(self, name: str, *, trace_id: str, tenant_id: str, **attrs) -> AbstractContextManager:
         if self._tracer is None:
             yield None
             return
+
         with self._tracer.start_as_current_span(name) as span:
             span.set_attribute("trace_id", trace_id)
             span.set_attribute("tenant_id", tenant_id)
             for k, v in attrs.items():
                 span.set_attribute(k, str(v))
+
             token = _current.set(span)
             try:
                 yield span
@@ -55,17 +55,18 @@ class OtelTracer:
         if self._tracer is None:
             yield None
             return
+
         with self._tracer.start_as_current_span(name) as span:
             for k, v in attrs.items():
                 span.set_attribute(k, str(v))
             yield span
 
     def event(self, name: str, **attrs) -> None:
-        from ...security.pii import scrub_attrs
+        from ...security.pii import scrubAttrs
 
         span = _current.get()
         if span is not None:
             try:
-                span.add_event(name, {k: str(v) for k, v in scrub_attrs(attrs).items()})
+                span.add_event(name, {k: str(v) for k, v in scrubAttrs(attrs).items()})
             except Exception:
                 pass

@@ -10,25 +10,22 @@ class BgeM3Embedding:
         try:
             from FlagEmbedding import BGEM3FlagModel
         except ImportError as exc:
-            raise ImportError(
-                "BgeM3Embedding needs the 'ml' extra: pip install -e '.[ml]'"
-            ) from exc
+            raise ImportError("BgeM3Embedding needs the 'ml' extra: pip install -e '.[ml]'") from exc
+
         self.model = model
         self.version = version
         self.dim = 1024
         self._encoder = BGEM3FlagModel(model, use_fp16=False, device=device)
 
-    def _encode(self, texts: Sequence[str]) -> EmbeddingResult:
+    def encode(self, texts: Sequence[str]) -> EmbeddingResult:
         out = self._encoder.encode(list(texts), return_dense=True, return_sparse=True)
         dense = out["dense_vecs"].tolist()
-        sparse = [
-            {int(term): float(weight) for term, weight in weights.items()}
-            for weights in out["lexical_weights"]
-        ]
+        sparse = [{int(term): float(weight) for term, weight in weights.items()} for weights in out["lexical_weights"]]
+
         return EmbeddingResult(dense=dense, sparse=sparse, model=self.model, version=self.version)
 
-    def encode_documents(self, texts: Sequence[str]) -> EmbeddingResult:
-        return self._encode(texts)
+    def encodeDocuments(self, texts: Sequence[str]) -> EmbeddingResult:
+        return self.encode(texts)
 
-    def encode_queries(self, texts: Sequence[str]) -> EmbeddingResult:
-        return self._encode(texts)
+    def encodeQueries(self, texts: Sequence[str]) -> EmbeddingResult:
+        return self.encode(texts)

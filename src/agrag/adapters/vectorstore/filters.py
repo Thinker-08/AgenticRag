@@ -5,15 +5,16 @@ from typing import Any
 _OPS = {"$in", "$nin", "$gte", "$lte", "$gt", "$lt", "$ne"}
 
 
-def _field(chunk_meta: dict, key: str) -> Any:
+def field(chunk_meta: dict, key: str) -> Any:
     return chunk_meta.get(key)
 
 
 def matches(chunk_meta: dict, filters: dict | None) -> bool:
     if not filters:
         return True
+
     for key, cond in filters.items():
-        val = _field(chunk_meta, key)
+        val = field(chunk_meta, key)
         if isinstance(cond, dict):
             for op, target in cond.items():
                 if op not in _OPS:
@@ -38,4 +39,5 @@ def matches(chunk_meta: dict, filters: dict | None) -> bool:
         else:
             if val != cond:
                 return False
+
     return True

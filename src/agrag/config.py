@@ -146,23 +146,25 @@ class Settings(BaseModel):
     reliability: ReliabilityConfig = Field(default_factory=ReliabilityConfig)
     serving: ServingConfig = Field(default_factory=ServingConfig)
 
-    def is_baseline(self) -> bool:
+    def isBaseline(self) -> bool:
         return self.agent_mode == "baseline"
 
 
-def _deep_merge(base: dict, over: dict) -> dict:
+def deepMerge(base: dict, over: dict) -> dict:
     out = dict(base)
     for k, v in over.items():
         if isinstance(v, dict) and isinstance(out.get(k), dict):
-            out[k] = _deep_merge(out[k], v)
+            out[k] = deepMerge(out[k], v)
         else:
             out[k] = v
+
     return out
 
 
-def _env_overrides() -> dict[str, Any]:
+def envOverrides() -> dict[str, Any]:
     out: dict[str, Any] = {}
     top = {f.upper() for f in Settings.model_fields}
+
     for key, val in os.environ.items():
         if not key.startswith("AGRAG_"):
             continue
@@ -172,29 +174,35 @@ def _env_overrides() -> dict[str, Any]:
             out[rest.lower()] = val
         elif section:
             field = rest[len(section) + 1 :].lower()
-            out.setdefault(section.lower(), {})[field] = _coerce(val)
+            out.setdefault(section.lower(), {})[field] = coerce(val)
+
     return out
 
 
-def _coerce(v: str) -> Any:
+def coerce(v: str) -> Any:
     low = v.lower()
+
     if low in ("true", "false"):
         return low == "true"
+
     try:
         return int(v)
     except ValueError:
         pass
+
     try:
         return float(v)
     except ValueError:
         return v
 
 
-def load_settings(path: str | Path | None = None) -> Settings:
+def loadSettings(path: str | Path | None = None) -> Settings:
     data: dict[str, Any] = {}
     cfg_path = Path(path) if path else Path(os.getenv("AGRAG_CONFIG", "config/default.yaml"))
     if cfg_path.exists():
         data = yaml.safe_load(cfg_path.read_text()) or {}
-    env = _env_overrides()
-    data = _deep_merge(data, env)
+
+    env = envOverrides()
+    data = deepMerge(data, env)
+
     return Settings(**data)

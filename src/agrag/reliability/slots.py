@@ -16,11 +16,13 @@ class SlotPool:
     async def acquire(self, budget: Budget | None = None):
         timeout = None
         if budget is not None:
-            timeout = max(0.05, budget.remaining_s() * self.wait_fraction)
+            timeout = max(0.05, budget.remainingS() * self.wait_fraction)
+
         try:
             await asyncio.wait_for(self._sem.acquire(), timeout=timeout)
         except asyncio.TimeoutError:
             raise Backpressure(f"no serving slot within {timeout:.2f}s") from None
+
         try:
             yield
         finally:

@@ -32,7 +32,7 @@ class Evidence(BaseModel):
     def ids(self) -> set[str]:
         return {sc.chunk.chunk_id for sc in self.scored}
 
-    def by_id(self, chunk_id: str) -> Chunk | None:
+    def byId(self, chunk_id: str) -> Chunk | None:
         for sc in self.scored:
             if sc.chunk.chunk_id == chunk_id:
                 return sc.chunk

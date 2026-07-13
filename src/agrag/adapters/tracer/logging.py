@@ -18,41 +18,33 @@ class LoggingTracer:
         self._log = structlog.get_logger("agrag.trace")
 
     @contextmanager
-    def start_trace(self, name: str, *, trace_id: str, tenant_id: str, **attrs):
+    def startTrace(self, name: str, *, trace_id: str, tenant_id: str, **attrs):
         tok = _trace_id.set(trace_id)
         self._log.info("trace.start", span=name, trace_id=trace_id, tenant_id=tenant_id, **attrs)
         t0 = time.monotonic()
+
         try:
             yield self
         finally:
-            self._log.info(
-                "trace.end",
-                span=name,
-                trace_id=trace_id,
-                ms=round((time.monotonic() - t0) * 1000, 1),
-            )
+            self._log.info("trace.end", span=name, trace_id=trace_id, ms=round((time.monotonic() - t0) * 1000, 1))
             _trace_id.reset(tok)
 
     @contextmanager
     def span(self, name: str, **attrs):
-        from ...security.pii import scrub_attrs
+        from ...security.pii import scrubAttrs
 
-        attrs = scrub_attrs(attrs)
+        attrs = scrubAttrs(attrs)
         depth = _depth.set(_depth.get() + 1)
         t0 = time.monotonic()
         self._log.info("span.start", span=name, trace_id=_trace_id.get(), **attrs)
+
         try:
             yield self
         finally:
-            self._log.info(
-                "span.end",
-                span=name,
-                trace_id=_trace_id.get(),
-                ms=round((time.monotonic() - t0) * 1000, 1),
-            )
+            self._log.info("span.end", span=name, trace_id=_trace_id.get(), ms=round((time.monotonic() - t0) * 1000, 1))
             _depth.reset(depth)
 
     def event(self, name: str, **attrs) -> None:
-        from ...security.pii import scrub_attrs
+        from ...security.pii import scrubAttrs
 
-        self._log.info(name, trace_id=_trace_id.get(), **scrub_attrs(attrs))
+        self._log.info(name, trace_id=_trace_id.get(), **scrubAttrs(attrs))

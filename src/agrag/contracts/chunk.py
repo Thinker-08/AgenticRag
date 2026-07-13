@@ -38,9 +38,9 @@ class Chunk(BaseModel):
     lang: str = "en"
     extra_metadata: dict = Field(default_factory=dict)
 
-    def embed_input(self) -> str:
+    def embedInput(self) -> str:
         body = self.linearized_text or self.text
         return f"{self.context_blurb}\n\n{body}".strip() if self.context_blurb else body
 
-    def embed_cache_key(self) -> str:
+    def embedCacheKey(self) -> str:
         return f"{self.content_hash}:{self.embedding_version}"

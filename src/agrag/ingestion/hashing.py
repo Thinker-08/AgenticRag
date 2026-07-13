@@ -5,23 +5,24 @@ import re
 import unicodedata
 
 
-def sha256_bytes(data: bytes) -> str:
+def sha256Bytes(data: bytes) -> str:
     return "sha256:" + hashlib.sha256(data).hexdigest()
 
 
-def normalize_for_hash(text: str) -> str:
+def normalizeForHash(text: str) -> str:
     text = unicodedata.normalize("NFKC", text)
     return re.sub(r"\s+", " ", text).strip().lower()
 
 
-def content_hash(text: str) -> str:
-    return "sha256:" + hashlib.sha256(normalize_for_hash(text).encode()).hexdigest()
+def contentHash(text: str) -> str:
+    return "sha256:" + hashlib.sha256(normalizeForHash(text).encode()).hexdigest()
 
 
-def merkle_diff(old_page_hashes: dict[int, str], new_page_hashes: dict[int, str]) -> set[int]:
+def merkleDiff(old_page_hashes: dict[int, str], new_page_hashes: dict[int, str]) -> set[int]:
     changed: set[int] = set()
     for page, h in new_page_hashes.items():
         if old_page_hashes.get(page) != h:
             changed.add(page)
+
     changed.update(set(old_page_hashes) - set(new_page_hashes))
     return changed

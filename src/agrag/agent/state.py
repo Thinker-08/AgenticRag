@@ -2,18 +2,7 @@ from __future__ import annotations
 
 from typing import TypedDict
 
-from ..contracts import (
-    Answer,
-    Budget,
-    Claim,
-    Computation,
-    Draft,
-    Evidence,
-    Grade,
-    QueryPlan,
-    Route,
-    Turn,
-)
+from ..contracts import Answer, Budget, Claim, Computation, Draft, Evidence, Grade, QueryPlan, Route, Turn
 
 
 class AgentState(TypedDict, total=False):

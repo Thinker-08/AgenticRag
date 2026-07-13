@@ -26,27 +26,27 @@ class GoldenCorpusDoc(BaseModel):
     text: str
 
 
-def _read_jsonl(path: Path) -> list[dict]:
+def readJsonl(path: Path) -> list[dict]:
     return [json.loads(ln) for ln in path.read_text().splitlines() if ln.strip()]
 
 
-def load_golden(path: str | Path) -> list[GoldenItem]:
-    return [GoldenItem(**row) for row in _read_jsonl(Path(path))]
+def loadGolden(path: str | Path) -> list[GoldenItem]:
+    return [GoldenItem(**row) for row in readJsonl(Path(path))]
 
 
-def _load_corpus_file(f: Path) -> list[GoldenCorpusDoc]:
+def loadCorpusFile(f: Path) -> list[GoldenCorpusDoc]:
     if f.suffix == ".jsonl":
-        return [GoldenCorpusDoc(**row) for row in _read_jsonl(f)]
+        return [GoldenCorpusDoc(**row) for row in readJsonl(f)]
     if f.suffix == ".txt":
         return [GoldenCorpusDoc(doc_id=f.stem, filename=f.name, text=f.read_text())]
     return []
 
 
-def load_corpus(dir_or_file: str | Path) -> list[GoldenCorpusDoc]:
+def loadCorpus(dir_or_file: str | Path) -> list[GoldenCorpusDoc]:
     p = Path(dir_or_file)
     if p.is_dir():
         docs: list[GoldenCorpusDoc] = []
         for f in sorted(p.iterdir()):
-            docs.extend(_load_corpus_file(f))
+            docs.extend(loadCorpusFile(f))
         return docs
-    return _load_corpus_file(p)
+    return loadCorpusFile(p)

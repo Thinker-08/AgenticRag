@@ -19,7 +19,6 @@ dependencies = [
     "httpx>=0.27",
     "rank-bm25>=0.2.2",
     "datasketch>=1.6",
-    "fastapi>=0.110",
     "uvicorn>=0.29",
     "langgraph>=0.2",
 ]
@@ -61,5 +60,8 @@ agrag = "agrag.cli:main"
 where = ["src"]
 
 [tool.ruff]
-line-length = 100
+line-length = 1000
 target-version = "py311"
+
+[tool.ruff.format]
+skip-magic-trailing-comma = true

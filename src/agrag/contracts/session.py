@@ -20,7 +20,7 @@ class Conversation(BaseModel):
     def window(self, n: int = 6) -> list[Turn]:
         return self.turns[-n:]
 
-    def last_assistant(self) -> Turn | None:
+    def lastAssistant(self) -> Turn | None:
         for t in reversed(self.turns):
             if t.role == "assistant":
                 return t

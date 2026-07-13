@@ -16,9 +16,8 @@ class QdrantVectorStore:
         try:
             from qdrant_client import AsyncQdrantClient
         except ImportError as e:
-            raise ImportError(
-                "QdrantVectorStore needs the 'stores' extra: pip install -e '.[stores]'"
-            ) from e
+            raise ImportError("QdrantVectorStore needs the 'stores' extra: pip install -e '.[stores]'") from e
+
         self._client = AsyncQdrantClient(url=host)
         self._collection = collection
         self._dim = dim
@@ -29,7 +28,8 @@ class QdrantVectorStore:
     async def upsert(self, records: Sequence[VectorRecord]) -> None:
         if not records:
             return
-        await self._ensure_collection()
+
+        await self.ensureCollection()
         from qdrant_client import models as qm
 
         points = []
@@ -40,140 +40,78 @@ class QdrantVectorStore:
                 payload.setdefault(key, val)
             vectors: dict = {"dense": rec.dense}
             if rec.sparse:
-                vectors["sparse"] = qm.SparseVector(
-                    indices=list(rec.sparse.keys()), values=list(rec.sparse.values())
-                )
-            points.append(
-                qm.PointStruct(
-                    id=str(uuid.uuid5(uuid.NAMESPACE_URL, chunk.chunk_id)),
-                    vector=vectors,
-                    payload=payload,
-                )
-            )
+                vectors["sparse"] = qm.SparseVector(indices=list(rec.sparse.keys()), values=list(rec.sparse.values()))
+            points.append(qm.PointStruct(id=str(uuid.uuid5(uuid.NAMESPACE_URL, chunk.chunk_id)), vector=vectors, payload=payload))
+
         await self._client.upsert(collection_name=self._collection, points=points)
 
-    async def search(
-        self,
-        query_dense: list[float],
-        *,
-        tenant_id: str,
-        top_k: int = 100,
-        query_sparse: SparseVector | None = None,
-        filters: dict | None = None,
-    ) -> list[ScoredChunk]:
-        await self._ensure_collection()
+    async def search(self, query_dense: list[float], *, tenant_id: str, top_k: int = 100, query_sparse: SparseVector | None = None, filters: dict | None = None) -> list[ScoredChunk]:
+        await self.ensureCollection()
         from qdrant_client import models as qm
 
-        qfilter = self._build_filter(qm, tenant_id, filters)
+        qfilter = self.buildFilter(qm, tenant_id, filters)
         quant = None
         if self._cfg.quantize != "none":
             quant = qm.QuantizationSearchParams(rescore=True, oversampling=4.0)
         params = qm.SearchParams(hnsw_ef=self._cfg.ef_search, quantization=quant)
 
         if query_sparse:
-            sparse = qm.SparseVector(
-                indices=list(query_sparse.keys()), values=list(query_sparse.values())
-            )
-            prefetch = [
-                qm.Prefetch(
-                    query=query_dense, using="dense", filter=qfilter, params=params, limit=top_k
-                ),
-                qm.Prefetch(query=sparse, using="sparse", filter=qfilter, limit=top_k),
-            ]
-            resp = await self._client.query_points(
-                collection_name=self._collection,
-                prefetch=prefetch,
-                query=qm.FusionQuery(fusion=qm.Fusion.RRF),
-                limit=top_k,
-                with_payload=True,
-            )
+            sparse = qm.SparseVector(indices=list(query_sparse.keys()), values=list(query_sparse.values()))
+            prefetch = [qm.Prefetch(query=query_dense, using="dense", filter=qfilter, params=params, limit=top_k), qm.Prefetch(query=sparse, using="sparse", filter=qfilter, limit=top_k)]
+            resp = await self._client.query_points(collection_name=self._collection, prefetch=prefetch, query=qm.FusionQuery(fusion=qm.Fusion.RRF), limit=top_k, with_payload=True)
         else:
-            resp = await self._client.query_points(
-                collection_name=self._collection,
-                query=query_dense,
-                using="dense",
-                query_filter=qfilter,
-                search_params=params,
-                limit=top_k,
-                with_payload=True,
-            )
+            resp = await self._client.query_points(collection_name=self._collection, query=query_dense, using="dense", query_filter=qfilter, search_params=params, limit=top_k, with_payload=True)
 
         out: list[ScoredChunk] = []
         for i, hit in enumerate(resp.points):
-            out.append(
-                ScoredChunk(chunk=Chunk.model_validate(hit.payload), score=hit.score, dense_rank=i)
-            )
+            out.append(ScoredChunk(chunk=Chunk.model_validate(hit.payload), score=hit.score, dense_rank=i))
         return out
 
-    async def delete_doc(self, doc_id: str, tenant_id: str) -> None:
-        await self._ensure_collection()
+    async def deleteDoc(self, doc_id: str, tenant_id: str) -> None:
+        await self.ensureCollection()
         from qdrant_client import models as qm
 
-        flt = qm.Filter(
-            must=[
-                qm.FieldCondition(key="tenant_id", match=qm.MatchValue(value=tenant_id)),
-                qm.FieldCondition(key="doc_id", match=qm.MatchValue(value=doc_id)),
-            ]
-        )
-        await self._client.delete(
-            collection_name=self._collection, points_selector=qm.FilterSelector(filter=flt)
-        )
+        flt = qm.Filter(must=[qm.FieldCondition(key="tenant_id", match=qm.MatchValue(value=tenant_id)), qm.FieldCondition(key="doc_id", match=qm.MatchValue(value=doc_id))])
+        await self._client.delete(collection_name=self._collection, points_selector=qm.FilterSelector(filter=flt))
 
     async def count(self, tenant_id: str | None = None) -> int:
-        await self._ensure_collection()
+        await self.ensureCollection()
         from qdrant_client import models as qm
 
         flt = None
         if tenant_id is not None:
-            flt = qm.Filter(
-                must=[qm.FieldCondition(key="tenant_id", match=qm.MatchValue(value=tenant_id))]
-            )
-        resp = await self._client.count(
-            collection_name=self._collection, count_filter=flt, exact=True
-        )
+            flt = qm.Filter(must=[qm.FieldCondition(key="tenant_id", match=qm.MatchValue(value=tenant_id))])
+
+        resp = await self._client.count(collection_name=self._collection, count_filter=flt, exact=True)
         return resp.count
 
-    async def _ensure_collection(self) -> None:
+    async def ensureCollection(self) -> None:
         if self._ready:
             return
+
         async with self._lock:
             if self._ready:
                 return
             from qdrant_client import models as qm
 
             if not await self._client.collection_exists(self._collection):
-                await self._client.create_collection(
-                    collection_name=self._collection,
-                    vectors_config={
-                        "dense": qm.VectorParams(
-                            size=self._dim,
-                            distance=qm.Distance.COSINE,
-                            hnsw_config=qm.HnswConfigDiff(
-                                m=self._cfg.hnsw_m, ef_construct=self._cfg.ef_construction
-                            ),
-                            quantization_config=self._quantization(qm),
-                        )
-                    },
-                    sparse_vectors_config={"sparse": qm.SparseVectorParams()},
-                )
+                await self._client.create_collection(collection_name=self._collection, vectors_config={"dense": qm.VectorParams(size=self._dim, distance=qm.Distance.COSINE, hnsw_config=qm.HnswConfigDiff(m=self._cfg.hnsw_m, ef_construct=self._cfg.ef_construction), quantization_config=self.quantization(qm))}, sparse_vectors_config={"sparse": qm.SparseVectorParams()})
             self._ready = True
 
-    def _quantization(self, qm):
+    def quantization(self, qm):
         if self._cfg.quantize == "int8":
-            return qm.ScalarQuantization(
-                scalar=qm.ScalarQuantizationConfig(type=qm.ScalarType.INT8, always_ram=True)
-            )
+            return qm.ScalarQuantization(scalar=qm.ScalarQuantizationConfig(type=qm.ScalarType.INT8, always_ram=True))
         if self._cfg.quantize == "binary":
             return qm.BinaryQuantization(binary=qm.BinaryQuantizationConfig(always_ram=True))
         return None
 
-    def _build_filter(self, qm, tenant_id: str, filters: dict | None):
+    def buildFilter(self, qm, tenant_id: str, filters: dict | None):
         must = [qm.FieldCondition(key="tenant_id", match=qm.MatchValue(value=tenant_id))]
         for key, cond in (filters or {}).items():
-            must.append(self._condition(qm, key, cond))
+            must.append(self.condition(qm, key, cond))
         return qm.Filter(must=must)
 
-    def _condition(self, qm, key: str, cond):
+    def condition(self, qm, key: str, cond):
         if isinstance(cond, dict):
             if "$in" in cond:
                 return qm.FieldCondition(key=key, match=qm.MatchAny(any=list(cond["$in"])))
