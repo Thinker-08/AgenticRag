@@ -101,11 +101,9 @@ flowchart TB
     end
     IDXW --> VEC & BM & DS
 
-    subgraph SERVE["③ Online serving — stateless, rate-limited, budgeted (C8/C13)"]
+    subgraph SERVE["③ Online serving — stateless, budgeted (C8/C13)"]
         direction TB
-        ASK["POST /ask (tenant, session_id)"] --> RL{"per-tenant<br>rate limit?"}
-        RL -->|over| R429["429"]
-        RL -->|ok| CACHE{"answer cache?<br>exact → semantic (number guard)"}
+        ASK["POST /ask (tenant, session_id)"] --> CACHE{"answer cache?<br>exact → semantic (number guard)"}
         CACHE -->|hit| OUT
         CACHE -->|miss, single-flight| FSM["Agent FSM (see state diagram)"]
         FSM --> RETR["Retrieve: embed → dense ⊕ BM25 → RRF<br>→ MinHash dedupe → cross-encoder rerank<br>→ lost-in-the-middle reorder → parent expand"]
@@ -118,7 +116,7 @@ flowchart TB
         OUT --> SESS["Persist turns to session store (C16)"]
     end
 
-    OTEL["trace_id + span/node · /stats p50·p95·p99 (C25/C26)"] -.-> SERVE
+    OTEL["trace_id + span/node (C25)"] -.-> SERVE
 ```
 
 Every model call in ③ is guarded by a circuit breaker, deadline-gated retries with jitter, and a GPU-slot semaphore that sheds to backpressure — degrading down a fixed ladder (12B → small model → cache → honest abstention) rather than failing hard.
@@ -195,10 +193,9 @@ Optional dependencies map to extras: `pdf` (PyMuPDF/pdfplumber/OCR), `ml` (torch
 | Method | Path | Purpose |
 |---|---|---|
 | `GET` | `/health` | Liveness + current mode/agent-mode + indexed chunk count |
-| `GET` | `/stats` | Rolling p50/p95/p99 latency, abstention/cache-hit/degraded rates (C26) |
 | `POST` | `/ingest` | Ingest a document: `{"text": "..."}` inline, or `{"content_base64": "..."}` for binary (PDF); returns a `JobHandle` |
 | `GET` | `/docs/{tenant_id}/{doc_id}` | Ingestion status + page progress for an async job |
-| `POST` | `/ask` | Ask a question: `{"query": "...", "session_id": "...", "history": [...], "tenant_id": "..."}`; returns a structured `Answer`. Pass `session_id` for server-side multi-turn (history is loaded/persisted server-side); rate-limited per tenant (429 on breach). |
+| `POST` | `/ask` | Ask a question: `{"query": "...", "session_id": "...", "history": [...], "tenant_id": "..."}`; returns a structured `Answer`. Pass `session_id` for server-side multi-turn (history is loaded/persisted server-side). |
 
 ```bash
 curl -s localhost:8000/ingest -H 'content-type: application/json' \
@@ -241,7 +238,7 @@ Two untrusted surfaces — uploaded PDF text and model-generated tool code — a
 
 - **Injection (C29):** chat-template control tokens are neutralized at ingest (`sanitize.py`), evidence is spotlighted behind a per-request nonce, delimited as data, and **datamarked** (an invisible marker interleaved between words so a whole span reads as uniformly-quoted data — stripped before the exact-quote grounding check); tool names/citation IDs are grammar-constrained to an allowlist; and a post-hoc **output filter** (`output_filter.py`) fails the query *closed* to abstention if the answer leaks the nonce, a template token, or a system-prompt fingerprint.
 - **Sandbox (C30):** the arithmetic tool AST-validates (no imports/attributes/dunders) then runs in a network-denied, resource-capped subprocess (gVisor/Firecracker are the drop-in production isolation behind the same interface).
-- **Tenancy (C31):** every vector/lexical/doc/session/cache lookup is tenant-scoped; the retriever **fails closed** (`SecurityError`) on an empty scope. When `serving.require_auth` is on, the tenant is taken from the `X-Tenant-Id` header (a stand-in for the authenticated principal), never the request body — the confused-deputy fix.
+- **Tenancy (C31):** every vector/lexical/doc/session/cache lookup is tenant-scoped; the retriever **fails closed** (`SecurityError`) on an empty scope.
 - **PII (`pii.py`):** email/SSN/phone/Luhn-card detection tags chunk metadata at ingest (tag-and-restrict), and every trace/log attribute is scrubbed + truncated so raw document text and PII never enter telemetry.
 - **PDF-bomb:** upload-size, per-parse wall-clock, page-count, **decompression-ratio**, and **render-pixel** caps quarantine oversized/slow/inflating inputs before they exhaust a worker.
 
@@ -264,7 +261,6 @@ Selected knobs (see [`src/agrag/config.py`](src/agrag/config.py) for the full se
 | `verifier.tau_entail` / `tau_contra` / `judge_gray_zone` | 0.85 / 0.10 / true | Entailment thresholds; gray zone escalates to the LLM judge then abstains |
 | `reliability.max_retries` / `breaker_failures` / `slot_wait_fraction` | 2 / 5 / 0.3 | Retry, circuit-breaker trip, backpressure queue budget |
 | `agent.max_scan_chunks` | 500 | Aggregation full-scan bound (truncation is logged, never silent) |
-| `serving.rate_limit_qpm` | 0 (off) | Per-tenant queries/minute cap (denial-of-GPU guard) |
 
 ---
 
@@ -297,7 +293,7 @@ Every design choice carries a stable concept ID. Grouped, with where each group 
 | **C · Reliability** | C10 idempotency · C11 backoff+jitter · C12 circuit breaker · C13 deadline propagation · C14 fallback cascade · C15 queue load-leveling | `ingestion/service.py` (content-hash), `reliability/{retry,breaker}.py`, `contracts/budget.py`, `adapters/llm/ollama.py`, `grounding/generator.py` (fallback), `ingestion/jobs.py` |
 | **D · Data & caching** | C16 read-your-writes · C17 cache invalidation · C18 multi-level + semantic cache · C19 single-flight · C20 Merkle-diff re-index | `agent/answer_cache.py`, `adapters/{cache,docstore,session}/*`, `ingestion/{service,stages}.py` (embed reuse + supersede) |
 | **E · Software design** | C21 dependency inversion · C22 strategy + feature flags · C23 agent-as-FSM · C24 pipeline/chain-of-responsibility | `interfaces/*`, `deps.py`, `container.py`, `config.py`, `agent/graph.py`, `ingestion/*` |
-| **F · Observability & eval** | C25 tracing + correlation IDs · C26 p50/p95/p99 + cost SLOs · C27 eval regression gates · C28 deterministic testing / validated judge | `adapters/tracer/{logging,langfuse,otel}.py`, `serving/ops.py`, `eval/{gate,calibration,recall}.py` |
+| **F · Observability & eval** | C25 tracing + correlation IDs · C27 eval regression gates · C28 deterministic testing / validated judge | `adapters/tracer/{logging,langfuse,otel}.py`, `eval/{gate,calibration,recall}.py` |
 | **G · Security** | C29 injection defense (data ≠ code) · C30 sandboxed code exec · C31 multi-tenancy isolation | `security/{sanitize,output_filter,pii}.py`, `promptfmt.py`, `tools/sandbox.py`, tenant filters in `adapters/{vectorstore,lexical,docstore,session}/*` |
 
 ---
@@ -315,10 +311,10 @@ Three milestones, nine steps, each gated by a *Done-when* and the single metric 
 | 5 · Verify + abstain | M2 Agentic core | NLI/lexical groundedness verifier + gray-zone judge escalation, per-claim citation matching, calibrated abstention + κ/τ calibration tooling | ✅ |
 | 6 · Multi-turn | M2 Agentic core | Server-side session store (memory/redis) + follow-up rewriting (coref/ellipsis) | ✅ |
 | 7 · Advanced retrieval | M3 Scale + harden | ONE differentiator (ColPali / GraphRAG / RAPTOR) chosen by dominant eval failure | ⚪ deferred (chosen from eval data) |
-| 8 · Eval + tracing | M3 Scale + harden | Eval harness + delta, CI regression gate, OTel spans, `/stats` p50/p95/p99 + rates, ANN-recall + judge-κ tooling | 🟢 (real benchmark datasets pending; synthetic golden set today) |
-| 9 · Harden + scale | M3 Scale + harden | Layered injection defense + output filter, tenant isolation, GPU-slot backpressure + circuit breaker + retries, small→large cascade, answer cache + invalidation + single-flight, per-tenant rate limits, PDF-bomb caps, ANN-recall measurement | ✅ |
+| 8 · Eval + tracing | M3 Scale + harden | Eval harness + delta, CI regression gate, OTel spans, ANN-recall + judge-κ tooling | 🟢 (real benchmark datasets pending; synthetic golden set today) |
+| 9 · Harden + scale | M3 Scale + harden | Layered injection defense + output filter, tenant isolation, GPU-slot backpressure + circuit breaker + retries, small→large cascade, answer cache + invalidation + single-flight, PDF-bomb caps, ANN-recall measurement | ✅ |
 
-A 14-agent audit (one per design page) put overall coverage at ~81% and confirmed the load-bearing spine is real, not scaffolded; the flagged gaps were then closed. What now works beyond the headline table: ingest-time typed-metadata extraction (fiscal_year/quarter/doc_type/currency) backing self-query, table subtotal checksums, cross-ref/footnote linking, equation/list atomic chunks, a semantic chunker; a retrieval-results cache + Qdrant full-precision rescore/oversampling + per-dependency circuit breakers; multi-hop dependency splicing, a Self-RAG plan critique, a clarifying-question terminal, a usefulness (ISUSE) check, contradiction surfacing, and a numeric-drift guard (a written number must match the sandbox result); datamarking, PII telemetry scrubbing, auth-derived tenancy with a fail-closed guard, and decompression/render-pixel bomb caps.
+A 14-agent audit (one per design page) put overall coverage at ~81% and confirmed the load-bearing spine is real, not scaffolded; the flagged gaps were then closed. What now works beyond the headline table: ingest-time typed-metadata extraction (fiscal_year/quarter/doc_type/currency) backing self-query, table subtotal checksums, cross-ref/footnote linking, equation/list atomic chunks, a semantic chunker; a retrieval-results cache + Qdrant full-precision rescore/oversampling + per-dependency circuit breakers; multi-hop dependency splicing, a Self-RAG plan critique, a clarifying-question terminal, a usefulness (ISUSE) check, contradiction surfacing, and a numeric-drift guard (a written number must match the sandbox result); datamarking, PII telemetry scrubbing, a fail-closed tenancy guard, and decompression/render-pixel bomb caps.
 
 **Remaining deferred (by design, not oversight):** step 7's one advanced retrieval differentiator — ColPali / GraphRAG / RAPTOR — is intentionally last (the roadmap picks it from the dominant eval-failure class); the synthetic golden set awaits the real benchmark suites (FinanceBench / TAT-QA / ConvFinQA / DocVQA); and full-mode *answer quality* (real Gemma + BGE + NLI + Qdrant) needs a GPU box to validate. Per project decision there is **no automated test suite** — verification is script-driven and the CI gate (`ruff` + `agrag eval --gate`).
 
@@ -368,7 +364,7 @@ AgenticRag/
     ├── reliability/            # retry (jitter), breaker (circuit), slots (backpressure), errors
     ├── security/               # sanitize (token-escape), output_filter (fail-closed), pii
     ├── tools/                  # sandbox.py — AST-validated, network-denied code exec (C30)
-    ├── serving/                # app.py (FastAPI), ops.py (rate limiter + latency percentiles)
+    ├── serving/                # app.py (FastAPI)
     ├── eval/                   # golden, metrics, harness, gate (C27), calibration (κ/τ), recall (C1)
     └── cli.py                  # ingest | ask | eval --gate | calibrate | recall | serve
 ```

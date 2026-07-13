@@ -1,5 +1,3 @@
-"""Settings + feature flags. Every concrete strategy is selected here, never hard-wired (C21, C22)."""
-
 from __future__ import annotations
 
 import os
@@ -126,9 +124,6 @@ class ServingConfig(BaseModel):
     host: str = "0.0.0.0"
     port: int = 8000
     default_tenant: str = "default"
-    require_auth: bool = False
-    rate_limit_qpm: int = 0
-    stats_window: int = 1000
 
 
 class Settings(BaseModel):
@@ -166,7 +161,6 @@ def _deep_merge(base: dict, over: dict) -> dict:
 
 
 def _env_overrides() -> dict[str, Any]:
-    """AGRAG_LLM_PROVIDER=ollama -> {'llm': {'provider': 'ollama'}}. Two-level keys only."""
     out: dict[str, Any] = {}
     top = {f.upper() for f in Settings.model_fields}
     for key, val in os.environ.items():
