@@ -1,10 +1,3 @@
-"""Ollama LLM adapter (full mode): grammar-constrained output behind reliability primitives.
-
-Every call is guarded by a circuit breaker (fail fast to the fallback tier when the server is
-unhealthy), deadline-gated retries with jitter on transient faults, and a GPU-slot semaphore that
-sheds to Backpressure rather than relocating the queue into the GPU (07 §1.2, §2.2-§2.5).
-"""
-
 from __future__ import annotations
 
 import base64
@@ -24,8 +17,6 @@ _RETRIABLE = (httpx.TransportError, httpx.HTTPStatusError, httpx.TimeoutExceptio
 
 
 class OllamaLLM:
-    """Generate / structured-generate against a local Ollama server."""
-
     name: str
 
     def __init__(

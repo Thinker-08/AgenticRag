@@ -1,12 +1,3 @@
-"""The eval harness (C27): ingest a frozen corpus, run the frozen golden set, report the delta.
-
-`compare` is the portfolio artifact — it re-runs the SAME frozen golden set through both a
-baseline and an agentic build and records the per-metric delta. Both builds share a single
-`Deps` bundle internally (so the in-memory stores populated by ingestion are the same ones the
-query app reads); the app/ingestion classes are imported lazily so this module stays importable
-while the query/ingestion planes are still under construction.
-"""
-
 from __future__ import annotations
 
 from typing import Iterable
@@ -81,7 +72,6 @@ class EvalHarness:
     async def ingest_corpus(
         self, items: Iterable[GoldenCorpusDoc], *, tenant_id: str = "default"
     ) -> list:
-        """Ingest each unique corpus doc once (idempotent per (tenant, doc_id))."""
         ingestion = self._get_ingestion()
         docs = []
         for cd in items:
@@ -121,7 +111,6 @@ class EvalHarness:
         k: int | None = None,
         label: str = "",
     ) -> EvalReport:
-        """Run every golden item through the query app and score it."""
         app = self._get_app()
         k = k or self.deps.settings.retrieval.top_k
         results: list[EvalItemResult] = []
@@ -143,7 +132,6 @@ class EvalHarness:
         corpus: Iterable[GoldenCorpusDoc] | None = None,
         tenant_id: str = "default",
     ) -> dict:
-        """Re-run the SAME frozen golden set through both builds; record the per-metric delta."""
         corpus = list(corpus if corpus is not None else self.corpus)
         golden = list(golden)
 

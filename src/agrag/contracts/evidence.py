@@ -1,5 +1,3 @@
-"""`Evidence` / `Citation` — what generation cites and verification checks (02 §4.2)."""
-
 from __future__ import annotations
 
 from pydantic import BaseModel, Field
@@ -8,8 +6,6 @@ from .chunk import Chunk
 
 
 class ScoredChunk(BaseModel):
-    """A retrieved candidate with per-stage scores, before it becomes a Citation."""
-
     chunk: Chunk
     score: float = 0.0
     dense_rank: int | None = None
@@ -29,8 +25,6 @@ class Citation(BaseModel):
 
 
 class Evidence(BaseModel):
-    """Frozen bundle handed to generation: deduped, reranked, tenant-scoped."""
-
     scored: list[ScoredChunk] = Field(default_factory=list)
     gaps: list[str] = Field(default_factory=list)
 

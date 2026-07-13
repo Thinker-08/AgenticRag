@@ -1,5 +1,3 @@
-"""Typed LangGraph state for the agent FSM (05 §1). One key per branch point the machine consumes."""
-
 from __future__ import annotations
 
 from typing import TypedDict

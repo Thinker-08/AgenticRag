@@ -1,10 +1,3 @@
-"""Assemble the final Answer (06 §5-§7): partial answers, calibrated abstention, intent-shaped formatting.
-
-A partial answer with an honest gap beats both a confident hallucination and a blanket refusal. Abstention
-phrasing is fixed and unambiguous — a document gap, never "I don't know" (a model gap). Contradiction is a
-hard signal (surfaced, never silently dropped) and a computed value must equal what the answer states.
-"""
-
 from __future__ import annotations
 
 import re
@@ -69,8 +62,6 @@ def _render(intent: Intent, claims: list[Claim], comps: list[Computation]) -> st
 
 
 def numeric_drift(answer_text: str, comps: list[Computation]) -> list[Computation]:
-    """A computed value must appear in the answer verbatim; a written number that drifts from the
-    sandbox result is the 15%-vs-18.4% failure the code tool exists to prevent (06 §4)."""
     present = {n.replace(",", "").rstrip(".") for n in _NUM.findall(answer_text)}
     drifted = []
     for c in comps:

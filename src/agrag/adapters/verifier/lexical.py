@@ -1,10 +1,3 @@
-"""Lexical entailment proxy — the local stand-in for the NLI cross-encoder (06 §3).
-
-A real DeBERTa-NLI head decides entailment; here we approximate it with content-token containment
-plus a hard numeric-grounding check: any number in the claim that is absent from the premise sharply
-lowers the score, which is exactly the hallucinated-figure failure the verifier must catch.
-"""
-
 from __future__ import annotations
 
 import re

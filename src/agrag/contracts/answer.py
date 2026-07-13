@@ -1,5 +1,3 @@
-"""`Answer` / `Claim` / `Computation` — the verified, cited output of grounding (06)."""
-
 from __future__ import annotations
 
 from enum import Enum
@@ -53,8 +51,6 @@ class Claim(BaseModel):
 
 
 class DraftClaim(BaseModel):
-    """The generator's constrained-decoded output shape (untrusted until verified)."""
-
     text: str
     citations: list[Citation] = Field(default_factory=list)
 

@@ -1,9 +1,3 @@
-"""Equation-block detection (03 stage 2): flag math so it chunks atomically, never mid-formula.
-
-Heuristic: LaTeX markers, or a high density of math symbols with few plain words. Deliberately
-conservative — a false EQUATION merely makes a block atomic; a false PARAGRAPH splits a formula.
-"""
-
 from __future__ import annotations
 
 import re

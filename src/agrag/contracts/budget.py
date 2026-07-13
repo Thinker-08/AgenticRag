@@ -1,5 +1,3 @@
-"""The single hard budget threaded through every FSM node and tool call (C13)."""
-
 from __future__ import annotations
 
 import time
@@ -7,7 +5,7 @@ from dataclasses import dataclass
 
 
 class BudgetExceeded(Exception):
-    """Raised when a step tries to spend against an exhausted budget."""
+    pass
 
 
 @dataclass

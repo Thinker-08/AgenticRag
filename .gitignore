@@ -1,4 +1,3 @@
-# Python
 __pycache__/
 *.py[cod]
 *.egg-info/
@@ -7,18 +6,15 @@ build/
 dist/
 .eggs/
 
-# Virtualenvs
 .venv/
 venv/
 env/
 
-# Tooling caches
 .ruff_cache/
 .mypy_cache/
 .coverage
 htmlcov/
 
-# Runtime data volumes, uploads, indexes, model weights — but keep the tracked fixtures.
 data/*
 !data/golden/
 !data/sample.txt
@@ -26,16 +22,13 @@ models/
 *.gguf
 *.bin
 
-# Local env + secrets (never commit real keys)
 .env
 .env.local
 .env.*.local
 
-# Editor / OS
 .idea/
 .vscode/
 .DS_Store
 *.swp
 
-# Design docs (not published)
 v2/

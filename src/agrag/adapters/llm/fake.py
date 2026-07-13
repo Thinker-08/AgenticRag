@@ -1,11 +1,3 @@
-"""Deterministic, schema-aware LLM double for the local path and for reproducible tests.
-
-It never touches a GPU yet exercises every FSM branch: it classifies intent, decomposes plans,
-and — crucially — *grounds by construction*, emitting a cited Draft only from chunks present in the
-evidence block. That makes the whole grounded-or-abstain contract runnable and testable offline.
-Swap OllamaLLM in for the real 12B multimodal Gemma in full mode.
-"""
-
 from __future__ import annotations
 
 import re

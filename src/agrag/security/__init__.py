@@ -4,7 +4,7 @@ from .sanitize import datamark, neutralize_template_tokens, strip_datamarks
 
 
 class SecurityError(RuntimeError):
-    """A fail-closed security boundary was violated (e.g. a query with no tenant scope, C31)."""
+    pass
 
 
 __all__ = [

@@ -1,10 +1,3 @@
-"""Shared prompt format + parsers used by the generator and by the FakeLLM double.
-
-Keeping the evidence-block format in one place means the local generator (FakeLLM, which grounds
-by parsing this block) and the real generator prompt cannot drift. The nonce delimiter is the
-spotlighting defense (C29): injected PDF text cannot forge EVIDENCE_END because it cannot predict it.
-"""
-
 from __future__ import annotations
 
 import hashlib

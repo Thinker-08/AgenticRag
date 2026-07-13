@@ -1,10 +1,3 @@
-"""PyMuPDF parser — cascading digital -> OCR -> vision extraction by text-ratio (03 §1).
-
-Digital text (with block geometry + reading order) is preferred; scanned pages fall through to
-Tesseract OCR, and pages OCR can't read fall through to multimodal vision transcription. Tables come
-from pdfplumber, recurring headers/footers are stripped, and text is NFKC/ftfy-normalized.
-"""
-
 from __future__ import annotations
 
 import asyncio

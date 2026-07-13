@@ -1,10 +1,3 @@
-"""The frozen golden set (C27): question records + their synthetic corpus.
-
-A golden set is the contract the regression gate scores against. Once created it is
-IMMUTABLE — the records are `frozen` pydantic models, so a "fix" to a flaky question
-is a new versioned set, never an in-place edit that silently moves the baseline.
-"""
-
 from __future__ import annotations
 
 import json
@@ -14,8 +7,6 @@ from pydantic import BaseModel, Field
 
 
 class GoldenItem(BaseModel):
-    """One frozen question record with ground truth (answer + labeled chunks)."""
-
     model_config = {"frozen": True}
 
     question: str
@@ -28,8 +19,6 @@ class GoldenItem(BaseModel):
 
 
 class GoldenCorpusDoc(BaseModel):
-    """A synthetic source doc the golden questions are answered from."""
-
     model_config = {"frozen": True}
 
     doc_id: str
@@ -42,7 +31,6 @@ def _read_jsonl(path: Path) -> list[dict]:
 
 
 def load_golden(path: str | Path) -> list[GoldenItem]:
-    """Read a JSONL file of `GoldenItem` records."""
     return [GoldenItem(**row) for row in _read_jsonl(Path(path))]
 
 
@@ -55,7 +43,6 @@ def _load_corpus_file(f: Path) -> list[GoldenCorpusDoc]:
 
 
 def load_corpus(dir_or_file: str | Path) -> list[GoldenCorpusDoc]:
-    """Read corpus docs from a JSONL/.txt file or a directory of them."""
     p = Path(dir_or_file)
     if p.is_dir():
         docs: list[GoldenCorpusDoc] = []

@@ -1,5 +1,3 @@
-# CI regression gate (C27, design page 09/13): lint, test, and block merges that regress the
-# frozen control on the golden set. Runs entirely in local/fake mode — no GPU, no services.
 name: ci
 
 on:

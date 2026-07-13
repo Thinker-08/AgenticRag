@@ -1,5 +1,3 @@
-"""content_hash — one deterministic key doing three jobs: idempotency, invalidation, cache keys (C10/C17/C20)."""
-
 from __future__ import annotations
 
 import hashlib
@@ -21,7 +19,6 @@ def content_hash(text: str) -> str:
 
 
 def merkle_diff(old_page_hashes: dict[int, str], new_page_hashes: dict[int, str]) -> set[int]:
-    """Return the set of page numbers whose content changed — re-embed only these subtrees (C20)."""
     changed: set[int] = set()
     for page, h in new_page_hashes.items():
         if old_page_hashes.get(page) != h:

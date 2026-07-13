@@ -1,9 +1,3 @@
-"""The retrieval funnel (04): over-fetch dense + BM25 → RRF fuse → dedupe → cross-encoder rerank.
-
-Over-fetch cheaply and broadly, then narrow expensively and precisely. First-stage similarity is a
-candidate generator, never the final ranking (C4). Strategy selects which legs run and how they weight.
-"""
-
 from __future__ import annotations
 
 import asyncio
@@ -30,12 +24,10 @@ _LEGS = {
 
 
 class EmbeddingContractError(RuntimeError):
-    """Query embedder and index vectors come from different (model, version) spaces (C3).
-    A cosine across spaces is meaningless noise — fail loud, force the blue/green re-embed."""
+    pass
 
 
 def reorder_for_context(chunks: list[ScoredChunk]) -> list[ScoredChunk]:
-    """Place the best at the head, 2nd at the tail, 3rd at position 2… (lost-in-the-middle, 04 §8)."""
     head: list[ScoredChunk] = []
     tail: list[ScoredChunk] = []
     for i, sc in enumerate(chunks):

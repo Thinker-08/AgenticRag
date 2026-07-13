@@ -1,9 +1,3 @@
-"""Reciprocal Rank Fusion (C5): fuse dense + BM25 by rank, not by incomparable scores.
-
-RRF(d) = Σ_r w_r / (k + rank_r(d)). Scale-free and outlier-robust — one interpretable knob k.
-Per-retriever weights let the router tilt toward BM25 for exact-ID/part-number queries (04 §4).
-"""
-
 from __future__ import annotations
 
 from collections import defaultdict

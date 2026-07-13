@@ -1,8 +1,3 @@
-"""Structured-logging tracer: one trace per query, one span per step (C25).
-
-Emits to stderr so the CLI's stdout stays clean, machine-parseable JSON (`agrag eval` / `recall`).
-"""
-
 from __future__ import annotations
 
 import sys

@@ -1,9 +1,3 @@
-"""Per-dependency circuit breaker (C12, 07 §2.3): Closed → Open → HalfOpen → Closed.
-
-Open short-circuits instantly to the next fallback tier; HalfOpen admits exactly one probe.
-Thresholds are per-instance so a degraded reranker cannot open the generation breaker.
-"""
-
 from __future__ import annotations
 
 import time
@@ -38,7 +32,6 @@ class CircuitBreaker:
             self._probe_out = False
 
     def allow(self) -> bool:
-        """True iff a call may proceed. In HalfOpen only the single probe passes."""
         self._maybe_half_open()
         if self._state == self.CLOSED:
             return True

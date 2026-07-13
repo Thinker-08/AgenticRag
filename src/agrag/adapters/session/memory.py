@@ -1,5 +1,3 @@
-"""In-process conversation store (C16) — the local stand-in for Redis/Postgres session state."""
-
 from __future__ import annotations
 
 from ...contracts import Conversation, Turn

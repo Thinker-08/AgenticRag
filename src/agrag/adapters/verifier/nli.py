@@ -1,9 +1,3 @@
-"""NLI cross-encoder verifier — claim-level entailment against cited spans (06 §3).
-
-A DeBERTa-style NLI head scores (premise, hypothesis) over contradiction/entailment/neutral;
-we return the raw entailment probability as the score and let the caller apply tau thresholds.
-"""
-
 from __future__ import annotations
 
 import asyncio

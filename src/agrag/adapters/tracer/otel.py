@@ -1,9 +1,3 @@
-"""OpenTelemetry tracer (C25): one trace per query, one span per FSM node/tool.
-
-Lazy-imports the OTel SDK; if absent it degrades to a no-op so `import` and local runs never break.
-Emits to the configured OTLP endpoint when the SDK + exporter are installed (the 'obs' extra).
-"""
-
 from __future__ import annotations
 
 import contextlib

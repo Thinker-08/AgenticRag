@@ -1,5 +1,3 @@
-"""BGE-M3 embedding adapter (full mode): dense + learned-sparse vectors."""
-
 from __future__ import annotations
 
 from typing import Sequence
@@ -8,8 +6,6 @@ from ...interfaces.types import EmbeddingResult
 
 
 class BgeM3Embedding:
-    """Encode text into 1024-d dense vectors plus BGE-M3 lexical (sparse) weights."""
-
     def __init__(self, model: str, version: str, device: str = "cpu") -> None:
         try:
             from FlagEmbedding import BGEM3FlagModel

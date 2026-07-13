@@ -1,5 +1,3 @@
-"""Router / planner / grader contracts. LLM-facing schemas are constrained-decoded (C3)."""
-
 from __future__ import annotations
 
 from enum import Enum
@@ -28,8 +26,6 @@ class Strategy(str, Enum):
 
 
 class Route(BaseModel):
-    """Router output: intent + retrieve/skip decision, one constrained-JSON call."""
-
     intent: Intent
     needs_retrieval: bool
     history_answerable: bool = False
@@ -61,8 +57,6 @@ class GradeVerdict(str, Enum):
 
 
 class Grade(BaseModel):
-    """CRAG grader output: relevance + slot-sufficiency kept separate (05 §5)."""
-
     verdict: GradeVerdict
     max_relevance: float = 0.0
     covered_slots: list[str] = Field(default_factory=list)

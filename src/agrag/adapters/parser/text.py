@@ -1,9 +1,3 @@
-"""Plain-text parser — the dependency-free local path (no PDF libs, no GPU).
-
-Splits text into pages/blocks, recovers simple pipe/whitespace tables as structured Table objects,
-and tracks section titles into breadcrumbs. Handles the local eval corpus and any .txt/.md upload.
-"""
-
 from __future__ import annotations
 
 import re

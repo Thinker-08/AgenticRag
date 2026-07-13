@@ -1,5 +1,3 @@
-"""BGE cross-encoder reranker: precise second-stage scoring of candidates (C4)."""
-
 from __future__ import annotations
 
 import asyncio

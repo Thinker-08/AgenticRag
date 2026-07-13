@@ -1,9 +1,3 @@
-"""Lexical-overlap reranker — the local stand-in for the BGE cross-encoder (C4).
-
-A real cross-encoder scores the (query, chunk) pair jointly; here we approximate joint relevance
-with token-overlap + fused-score priors so the two-stage funnel and reorder logic are exercised.
-"""
-
 from __future__ import annotations
 
 import re

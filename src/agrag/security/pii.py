@@ -1,10 +1,3 @@
-"""Lightweight PII detection (08 threat 4): tag at ingest, scrub from telemetry.
-
-Regex + checksum detectors for the high-signal classes. Policy is tag-and-restrict (redacting
-inline destroys answerability); the tags ride chunk metadata so a deployment can filter or audit.
-Phone/card patterns require separators or pass Luhn so financial figures and years never match.
-"""
-
 from __future__ import annotations
 
 import re
@@ -51,7 +44,6 @@ _MAX_ATTR = 200
 
 
 def scrub(text: str) -> str:
-    """Redact PII spans from a string bound for telemetry (08 threat 4: PII never enters traces/logs)."""
     text = _EMAIL.sub("[email]", text)
     text = _SSN.sub("[ssn]", text)
     text = _PHONE.sub("[phone]", text)
@@ -62,7 +54,6 @@ def scrub(text: str) -> str:
 
 
 def scrub_attrs(attrs: dict) -> dict:
-    """Scrub + truncate span/log attributes so raw document text and PII never land in telemetry."""
     out: dict = {}
     for k, v in attrs.items():
         if isinstance(v, str):

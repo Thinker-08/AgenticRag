@@ -1,10 +1,3 @@
-"""GPU-slot admission pool (C8, 07 §1.2): bounded concurrency with deadline-gated queueing.
-
-Waiting past the caller's queue budget relocates the queue into the GPU — strictly worse — so a
-slot that isn't free within `slot_wait_fraction × remaining` raises Backpressure and the caller
-drops into its fallback tier instead of blocking indefinitely.
-"""
-
 from __future__ import annotations
 
 import asyncio

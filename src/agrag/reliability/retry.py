@@ -1,10 +1,3 @@
-"""Deadline-gated retries with exponential backoff + full jitter (C11, 07 §2.2).
-
-Only retriable faults retry; deterministic errors propagate immediately — retrying them just
-burns the deadline. Full jitter is deliberate: synchronized retries after a model-server hiccup
-arrive as a thundering herd and re-trip the very slot limit that caused the failure.
-"""
-
 from __future__ import annotations
 
 import asyncio

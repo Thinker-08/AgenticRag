@@ -1,10 +1,3 @@
-"""Cited generation (06 §1): the generator is an untrusted, tool-less proposer.
-
-Every claim carries its own citations to exact spans. The output shape is grammar-constrained (Draft),
-the evidence is spotlighted as untrusted data behind a per-request nonce (C29), and any arithmetic is
-pre-computed by the sandbox and passed in as trusted results — the model never does math in its head.
-"""
-
 from __future__ import annotations
 
 from ..contracts import (
@@ -60,8 +53,6 @@ class Generator:
         return draft
 
     async def _generate_draft(self, user: str, budget: Budget) -> tuple[Draft, bool]:
-        """Tier 0 = 12B generator; on a reliability failure degrade to the small model rather than
-        fail the query (07 §2.5). Verification still runs, so a degraded answer is still grounded."""
         from ..reliability import Backpressure, CircuitOpen, RetriesExhausted
 
         kwargs = dict(
@@ -83,8 +74,6 @@ class Generator:
     def _aggregation_draft(
         self, evidence: Evidence, computations: list[Computation] | None
     ) -> Draft:
-        """Each enumerated item is a verbatim quote of its own chunk -> trivially grounded; the count
-        is the sandboxed computation. No LLM prose, so nothing to hallucinate (05 §8 / 06 §7)."""
         claims: list[DraftClaim] = []
         for sc in evidence.scored:
             c = sc.chunk

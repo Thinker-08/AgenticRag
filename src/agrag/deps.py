@@ -1,9 +1,3 @@
-"""`Deps` — the assembled dependency bundle threaded through every service (C21).
-
-Modules depend on this bundle of *interfaces*, never on concrete adapters. The container
-(`agrag.container`) is the single place that picks concretes from `Settings` feature flags.
-"""
-
 from __future__ import annotations
 
 from dataclasses import dataclass

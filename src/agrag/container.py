@@ -1,10 +1,3 @@
-"""The composition root: build a `Deps` bundle and top-level apps from `Settings`.
-
-Concrete adapters are imported lazily inside factories so that selecting the `local`
-provider set never imports torch/qdrant/redis, and a missing optional dependency only
-errors when its provider is actually chosen.
-"""
-
 from __future__ import annotations
 
 from .config import Settings, load_settings
@@ -211,7 +204,6 @@ def build_deps(settings: Settings | None = None) -> Deps:
 
 
 def build_app(settings: Settings | None = None):
-    """Return the query-plane app selected by `agent_mode` (agentic FSM or vanilla control)."""
     deps = build_deps(settings)
     if deps.settings.is_baseline():
         from .baseline.vanilla import BaselineRAG

@@ -1,5 +1,3 @@
-"""agrag CLI: ingest a document, ask a question, run the eval delta, or serve the API."""
-
 from __future__ import annotations
 
 import argparse
@@ -102,8 +100,6 @@ def _load_control(path: str | None) -> dict | None:
 
 
 async def _calibrate(args) -> None:
-    """Sweep TAU_ENTAIL + report judge↔human κ from a labeled JSONL of
-    {entail_score, is_grounded, judge?, human?} rows (06 §6, 09, C28)."""
     from .eval.calibration import cohens_kappa, sweep_tau
 
     rows = [json.loads(ln) for ln in Path(args.labels).read_text().splitlines() if ln.strip()]

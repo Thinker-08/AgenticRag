@@ -1,16 +1,3 @@
-"""Footnote re-attachment + cross-reference linking (03 stage 3).
-
-Footnote markers ([N] / N) superscript-style) are re-attached by inlining the footnote text at the
-anchor and demoting the standalone definition block to FOOTER (excluded from chunking) so the note
-travels with its context instead of surfacing as an orphan chunk. "see Figure 3" / "Table 2" /
-"§2.1" references become structured `links` on the block, propagated to chunk metadata.
-
-Edge cases: markers only bind when a matching definition exists (a bare "[3]" citation without a
-footnote stays untouched); footnote numbers are capped at 2 digits so "[2023]" never binds; links
-are intra-document only; a definition referenced from several anchors is inlined once at the first
-anchor and linked from the rest.
-"""
-
 from __future__ import annotations
 
 import re

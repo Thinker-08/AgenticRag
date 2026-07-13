@@ -1,5 +1,3 @@
-"""In-process cache with per-key single-flight (C18, C19) for the local path."""
-
 from __future__ import annotations
 
 import asyncio

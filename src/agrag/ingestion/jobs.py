@@ -1,9 +1,3 @@
-"""In-process job queue with load-leveling + at-least-once semantics (C15, C10).
-
-Local stand-in for Celery/RQ + Redis: enqueue returns immediately (HTTP 202 shape); a worker drains
-the queue. Every stage write is keyed so a replayed job overwrites-in-place rather than duplicating.
-"""
-
 from __future__ import annotations
 
 import asyncio

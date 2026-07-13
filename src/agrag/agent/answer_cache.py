@@ -1,12 +1,3 @@
-"""Answer cache (C17/C18/C19): the biggest latency/GPU lever and the single most dangerous knob.
-
-Exact key = (tenant, docset_version, normalized_query, history_hash). Semantic tier finds a prior
-query whose embedding is ≥ threshold AND whose salient tokens (years, numbers) match — because
-embeddings are weak at numbers, "2022 revenue" and "2023 revenue" are cosine-near but must NOT share
-an answer. Both are scoped by `docset_version` so a doc edit/delete invalidates every dependent
-answer (reverse lookup, not a full flush). When in doubt it MISSES and recomputes — never guesses.
-"""
-
 from __future__ import annotations
 
 import hashlib
@@ -46,8 +37,6 @@ class AnswerCache:
         self.max_entries = cfg.semantic_max_entries
 
     async def docset_version(self, tenant_id: str) -> str:
-        """Version = hash of the tenant's READY (doc_id, content_hash) set. A supersede/edit/delete
-        changes it, so every cached answer keyed by the old version is transparently invalidated."""
         from ..contracts import JobState
 
         docs = sorted(
@@ -110,9 +99,6 @@ class AnswerCache:
         history: list,
         compute: Callable[[], Awaitable[Answer]],
     ) -> Answer:
-        """Cache-through with single-flight (C19). Concurrent identical misses coalesce onto one
-        computation; abstentions/degraded results are not persisted (they may resolve once indexing
-        finishes or load eases). Falls back to computing directly if caching is off."""
         if not self.enabled:
             return await compute()
         hit = await self.get(tenant_id, query, history)

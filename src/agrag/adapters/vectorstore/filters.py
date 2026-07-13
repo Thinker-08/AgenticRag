@@ -1,9 +1,3 @@
-"""A tiny allowlisted metadata-filter evaluator shared by the local stores.
-
-Filters are produced by the self-query step under constrained decoding, so they can only reference
-known fields and operators — this evaluator mirrors that allowlist and is never eval'd (04 §6, C29).
-"""
-
 from __future__ import annotations
 
 from typing import Any

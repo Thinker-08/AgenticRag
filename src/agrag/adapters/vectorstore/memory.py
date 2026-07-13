@@ -1,9 +1,3 @@
-"""In-memory dense (+ sparse) ANN via exact cosine — the local stand-in for Qdrant.
-
-Exact search is correct at portfolio scale; the recall–latency–memory triangle (C1) and
-quantization (C2) are Qdrant-only concerns handled in the full-mode adapter.
-"""
-
 from __future__ import annotations
 
 from typing import Sequence

@@ -1,5 +1,3 @@
-"""Redis-backed conversation store (C16): tenant-scoped, capped rolling window."""
-
 from __future__ import annotations
 
 from ...contracts import Conversation, Turn

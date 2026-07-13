@@ -1,10 +1,3 @@
-"""Pure metric functions over `Answer` + `GoldenItem` (09 §5 metrics catalog).
-
-Deterministic, no I/O, no model calls — so a red gate is a real regression, not noise.
-Retrieval metrics operate on whatever chunk ids the answer actually surfaced
-(`Answer.sources()`), which is the only retrieval signal visible at the answer plane.
-"""
-
 from __future__ import annotations
 
 import re
@@ -33,7 +26,6 @@ def _tokens(text: str) -> list[str]:
 
 
 def token_f1(pred: str, gold: str) -> float:
-    """SQuAD-style token overlap F1 between prediction and gold answer."""
     p, g = _tokens(pred), _tokens(gold)
     if not p and not g:
         return 1.0
@@ -47,12 +39,10 @@ def token_f1(pred: str, gold: str) -> float:
 
 
 def exact_match(pred: str, gold: str) -> float:
-    """1.0 iff normalized prediction equals normalized gold."""
     return float(_normalize(pred) == _normalize(gold))
 
 
 def recall_at_k(retrieved_ids: Sequence[str], gold_ids: Iterable[str], k: int) -> float:
-    """Fraction of labeled relevant chunks present in the top-k retrieved ids."""
     gold = set(gold_ids)
     if not gold:
         return 0.0
@@ -61,7 +51,6 @@ def recall_at_k(retrieved_ids: Sequence[str], gold_ids: Iterable[str], k: int) -
 
 
 def context_precision(retrieved: Sequence[str], gold_ids: Iterable[str]) -> float:
-    """Signal-to-noise of surfaced context: share of retrieved ids that are relevant."""
     ret = list(retrieved)
     gold = set(gold_ids)
     if not ret or not gold:
@@ -70,7 +59,6 @@ def context_precision(retrieved: Sequence[str], gold_ids: Iterable[str]) -> floa
 
 
 def faithfulness(answer: "Answer") -> float:
-    """Fraction of claims labeled SUPPORTED (vacuously 1.0 when there are no claims)."""
     claims = answer.claims
     if not claims:
         return 1.0
@@ -79,7 +67,6 @@ def faithfulness(answer: "Answer") -> float:
 
 
 def citation_accuracy(answer: "Answer") -> float:
-    """Among cited claims, the share whose cited spans support the claim (SUPPORTED)."""
     cited = [c for c in answer.claims if c.citations]
     if not cited:
         return 0.0
@@ -87,17 +74,14 @@ def citation_accuracy(answer: "Answer") -> float:
 
 
 def correct_refusal(answer: "Answer", item: "GoldenItem") -> bool:
-    """True when an unanswerable question is correctly abstained on."""
     return (not item.answerable) and answer.status == AnswerStatus.ABSTAINED
 
 
 def over_abstention(answer: "Answer", item: "GoldenItem") -> bool:
-    """True when an answerable question is wrongly abstained on (miscalibration)."""
     return item.answerable and answer.status == AnswerStatus.ABSTAINED
 
 
 def metrics_over(results: list[dict]) -> dict:
-    """Mean of every numeric metric across per-item result dicts, skipping absent keys."""
     sums: dict[str, float] = {}
     counts: dict[str, int] = {}
     for r in results:

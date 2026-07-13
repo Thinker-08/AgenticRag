@@ -1,5 +1,3 @@
-"""Intermediate ingestion artifacts passed between chain-of-responsibility stages (03)."""
-
 from __future__ import annotations
 
 import re
@@ -67,10 +65,6 @@ class Table(BaseModel):
         return "\n".join(lines)
 
     def validate_checksum(self) -> bool:
-        """Arithmetic self-check (03 stage 2): when a Total row exists, each numeric column's data
-        rows must sum to it (±1.5% for report rounding). Percent columns are skipped — they don't
-        sum. No Total row (or nothing parseable) is vacuously ok; a mismatch flags the grid
-        low-confidence rather than rejecting it."""
         rows = self.grid[self.n_header_rows :]
         headers = self.grid[: self.n_header_rows]
         total_idx = next(

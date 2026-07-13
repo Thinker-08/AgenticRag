@@ -1,5 +1,3 @@
-"""`Chunk` — the atomic unit of retrieval and the API between the two planes (02 §4.1)."""
-
 from __future__ import annotations
 
 from enum import Enum

@@ -1,10 +1,3 @@
-"""The agent as an explicit finite state machine (05 §1, C23).
-
-Named states, typed transitions, terminal conditions — a bounded-cycle graph that provably halts.
-Two corrective cycles share one budget: Grade→Reformulate→Retrieve (CRAG) and Verify→Reformulate→Retrieve
-(Self-RAG). Reformulate strictly decrements iters_left, so total LLM calls and wall-time are both bounded.
-"""
-
 from __future__ import annotations
 
 import re
@@ -102,7 +95,6 @@ def _content_tokens(text: str) -> set[str]:
 
 
 def _entities(text: str) -> list[str]:
-    """Naive proper-noun spans for session carry-over; a real NER slots in behind the same shape."""
     out: list[str] = []
     for m in _ENTITY.finditer(text):
         cleaned = " ".join(w for w in m.group(1).split() if w not in _ENTITY_STOP)
@@ -228,8 +220,6 @@ class AgentGraph:
         return {"plan": plan}
 
     async def _critique_plan(self, plan: QueryPlan, budget) -> QueryPlan:
-        """Self-RAG plan critique (05 §6): a redundant step is far cheaper to drop here than after k
-        failed retrievals. Never drop a step another kept step depends on, and keep at least one."""
         if len(plan.sub_steps) <= 1:
             return plan
         listing = "\n".join(f"{s.step_id}: tool={s.tool.value} q={s.query}" for s in plan.sub_steps)
@@ -251,7 +241,6 @@ class AgentGraph:
         return plan.model_copy(update={"sub_steps": kept})
 
     def _sanitize_plan(self, plan: QueryPlan, fallback_q: str) -> QueryPlan:
-        """Constrained decoding pins types, not ranges: clamp k, cap fan-out, drop unknown deps."""
         steps = plan.sub_steps[:8]
         known = {st.step_id for st in steps}
         steps = [
@@ -323,8 +312,6 @@ class AgentGraph:
         return {"plan": state["plan"].model_copy(update={"sub_steps": new_steps})}
 
     async def _hyde(self, query: str, budget) -> str:
-        """HyDE: draft a hypothetical answer and retrieve against it (04 §4). The hypothetical is
-        used ONLY as a retrieval probe — never surfaced or cited — so a wrong guess can't leak in."""
         prompt = (
             f"<query>{query}</query>\nWrite a one-sentence hypothetical answer to this "
             "question as it might appear in a document. Output only that sentence."
@@ -362,8 +349,6 @@ class AgentGraph:
 
     @staticmethod
     def _useful(query: str, claims: list, computations: list) -> bool:
-        """Self-RAG usefulness (ISUSE, 06): a grounded draft that shares no content with the question
-        does not answer it. A computed result always counts as useful."""
         if computations:
             return True
         q = _content_tokens(query)

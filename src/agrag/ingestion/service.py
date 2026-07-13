@@ -1,5 +1,3 @@
-"""IngestionService — orchestrates the offline plane as an idempotent, queued job (02, 03)."""
-
 from __future__ import annotations
 
 import asyncio
@@ -78,7 +76,6 @@ class IngestionService:
         filename: str = "",
         doc_id: str | None = None,
     ) -> Document:
-        """Synchronous convenience (eval / CLI / local): submit + process inline, return the final Document."""
         content_hash = sha256_bytes(data)
         existing = await self.deps.docstore.get_by_hash(tenant_id, content_hash)
         if existing and existing.status == JobState.READY:
@@ -205,8 +202,6 @@ class IngestionService:
     async def _merkle_report(
         self, tenant_id: str, filename: str, new_hashes: dict[int, str]
     ) -> None:
-        """Merkle diff (C20): on a same-file re-upload, report which pages changed. Unchanged pages'
-        chunks are already skipped by the content-hash embed cache, so this makes re-index incremental."""
         if not filename:
             return
         prior = next(
@@ -231,8 +226,6 @@ class IngestionService:
         )
 
     async def _supersede_prior_versions(self, doc: Document) -> None:
-        """Blue/green on re-upload of an edited doc (C17/C20): deindex prior READY versions of the
-        same file so stale and current content never coexist in retrieval."""
         if not doc.filename:
             return
         for prior in await self.deps.docstore.list_docs(doc.tenant_id):

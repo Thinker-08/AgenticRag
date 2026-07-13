@@ -1,5 +1,3 @@
-"""In-process document/job status + chunk store (read-your-writes, C16) for the local path."""
-
 from __future__ import annotations
 
 from ...contracts import Chunk, Document

@@ -1,10 +1,3 @@
-"""Deterministic hashing embedder — a dependency-free stand-in for BGE-M3 (dense + sparse).
-
-Not semantically strong, but it is a real, normalized vector space: identical text -> identical
-vector, related text shares n-gram features, and it emits a learned-sparse-style bag so the whole
-hybrid + RRF + rerank funnel runs and is testable without a GPU. Swap for BgeM3Embedding in full mode.
-"""
-
 from __future__ import annotations
 
 import hashlib

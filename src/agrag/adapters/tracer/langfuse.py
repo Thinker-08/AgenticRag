@@ -1,5 +1,3 @@
-"""Langfuse tracer (full mode). Degrades to a no-op if langfuse is missing; never raises (C25)."""
-
 from __future__ import annotations
 
 import contextlib
@@ -12,8 +10,6 @@ _current: contextvars.ContextVar = contextvars.ContextVar("agrag_langfuse_curren
 
 
 class LangfuseTracer:
-    """One trace per query, one span per step/tool. All tracing failures are swallowed."""
-
     def __init__(self, host: str) -> None:
         self._client = None
         try:

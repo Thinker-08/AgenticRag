@@ -1,5 +1,3 @@
-"""`Document` / `Job` — the ingestion state machine record (02 §4.2, 03)."""
-
 from __future__ import annotations
 
 from enum import Enum
@@ -60,8 +58,6 @@ class Job(BaseModel):
 
 
 class JobHandle(BaseModel):
-    """Non-blocking submit result (HTTP 202)."""
-
     doc_id: str
     job_id: Optional[str] = None
     status: str = "queued"

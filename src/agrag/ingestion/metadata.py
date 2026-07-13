@@ -1,9 +1,3 @@
-"""Ingest-time structured-metadata extraction (03/04 §6): numbers/dates/enums embed poorly, so lift
-them to filterable payload the self-query step can predicate on (fiscal_year, fiscal_quarter,
-doc_type, currency). A chunk gets `fiscal_year` only when exactly ONE year appears in it, so an
-equality filter can't wrongly match a multi-year summary — the query surface is now backed by data.
-"""
-
 from __future__ import annotations
 
 import re
@@ -35,7 +29,6 @@ def _currency(text: str) -> str | None:
 
 
 def doc_metadata(text: str) -> dict:
-    """Document-level fields inferred once from the whole doc."""
     meta: dict = {}
     for pat, dt in _DOC_TYPES:
         if pat.search(text):

@@ -1,10 +1,3 @@
-"""Groundedness verifier (06 §2-§3): the load-bearing faithfulness gate.
-
-Three layers, cheapest first: structural (chunk_id in the tenant-scoped bundle) → lexical (quote is an
-exact substring of the cited chunk) → semantic (NLI entailment). A specialized verifier adjudicates —
-never the generator judging itself. Bias toward abstention: the gray zone resolves to UNSUPPORTED.
-"""
-
 from __future__ import annotations
 
 import asyncio

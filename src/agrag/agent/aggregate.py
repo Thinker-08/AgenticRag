@@ -1,11 +1,3 @@
-"""Aggregation via map-reduce full-scan (05 §8): top-k returns k, not the true total.
-
-Count / list-all queries are routed off top-k. We scan every retrievable chunk of the tenant's
-READY docs (bounded by `max_scan_chunks`, truncation logged never silent), map an LLM extraction
-over each, reduce by case/whitespace-normalized dedupe, and count in the sandbox — so the number
-is computed, not eyeballed. Evidence for citation is the chunks that actually contributed items.
-"""
-
 from __future__ import annotations
 
 import asyncio

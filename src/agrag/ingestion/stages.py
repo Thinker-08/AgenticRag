@@ -1,8 +1,3 @@
-"""Ingestion stage functions (03): contextualize → embed → index. Each is a typed transform.
-
-Chunks are frozen (a data contract), so stages produce updated copies via model_copy — never mutate.
-"""
-
 from __future__ import annotations
 
 import asyncio
@@ -15,7 +10,6 @@ from ..security.pii import detect_pii
 
 
 def tag_pii(chunks: Sequence[Chunk]) -> list[Chunk]:
-    """Tag-and-restrict policy (08 threat 4): PII types ride chunk metadata, text stays intact."""
     out: list[Chunk] = []
     for c in chunks:
         types = detect_pii(c.text)

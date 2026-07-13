@@ -1,5 +1,3 @@
-"""AgentApp — the public query-plane entry point wrapping the compiled FSM."""
-
 from __future__ import annotations
 
 import uuid
@@ -96,8 +94,6 @@ class AgentApp:
         )
 
     async def _flag_still_indexing(self, answer: Answer, tenant_id: str) -> Answer:
-        """Read-your-writes (C16): an abstention while docs are still indexing must say so —
-        'not stated in the document' would misreport index lag as a document gap."""
         if answer.status != AnswerStatus.ABSTAINED or answer.abstention_reason != "no_evidence":
             return answer
         try:

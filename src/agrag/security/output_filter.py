@@ -1,11 +1,3 @@
-"""Answer output filter (08 threat 1, defense layer 4): fail closed on injection fingerprints.
-
-Scans the final answer for (a) the per-request evidence nonce (delimiter leak), (b) raw chat-
-template control tokens (ingest neutralizes legitimate document mentions, so a raw token here
-means the model emitted one), and (c) system-prompt fingerprints (prompt-leak). A hit is treated
-as a FAILED verification: the query fails closed to abstention, never open (07 §6 callout).
-"""
-
 from __future__ import annotations
 
 import re
@@ -25,7 +17,6 @@ _PROMPT_FINGERPRINTS = (
 
 
 def scan_answer(answer: Answer, *, nonce: str) -> str | None:
-    """Return a violation label, or None if the answer is clean."""
     texts = [answer.answer_text] + [c.text for c in answer.claims]
     for text in texts:
         if nonce and nonce in text:

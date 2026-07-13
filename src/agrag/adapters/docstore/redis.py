@@ -1,5 +1,3 @@
-"""Redis-backed DocStore: durable documents + chunk payloads, tenant-scoped keys (C16, C31)."""
-
 from __future__ import annotations
 
 from typing import Sequence
@@ -8,8 +6,6 @@ from ...contracts import Chunk, Document
 
 
 class RedisDocStore:
-    """DocStore over Redis. Every key is prefixed with the tenant, so lookups cannot cross tenants."""
-
     def __init__(self, host: str) -> None:
         try:
             import redis.asyncio as aioredis

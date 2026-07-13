@@ -1,9 +1,3 @@
-"""Self-querying (04 §6): parse an NL query into a semantic part + an allowlisted structured filter.
-
-The filter is emitted under constrained decoding (a field/operator allowlist), validated, and compiled
-to the store's filter API — never eval'd or string-concatenated (C29). Open-model injection posture.
-"""
-
 from __future__ import annotations
 
 from pydantic import BaseModel, Field

@@ -1,5 +1,3 @@
-"""Redis-backed cache with single-flight get_or_compute (C18, C19)."""
-
 from __future__ import annotations
 
 import asyncio
@@ -12,8 +10,6 @@ _POLL_MAX = 300
 
 
 class RedisCache:
-    """Cache backed by Redis; concurrent callers for a key compute once via a SET NX lock."""
-
     def __init__(self, host: str) -> None:
         try:
             import redis.asyncio as aioredis

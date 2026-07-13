@@ -1,9 +1,3 @@
-"""Chunkers (03 §4). Hierarchical parent-child is the default; recursive fixed-size is the baseline control.
-
-Retrieve a small precise child, feed the larger parent to the generator (small-to-big). Tables/lists/
-equations stay atomic so cells aren't split. Breadcrumbs are prepended so context survives isolation.
-"""
-
 from __future__ import annotations
 
 from ..config import ChunkerConfig
@@ -162,8 +156,6 @@ class HierarchicalChunker:
 
 
 class RecursiveChunker:
-    """Fixed-size ~512 with ~15% overlap, structure-blind — the vanilla baseline control (page 13, step 1)."""
-
     name = "recursive"
 
     def __init__(self, size: int = 512, overlap: int = 77) -> None:
@@ -195,10 +187,6 @@ class RecursiveChunker:
 
 
 class SemanticChunker(HierarchicalChunker):
-    """Cut prose at semantic breakpoints (embed sentences, split where adjacent similarity drops
-    below a percentile) instead of fixed word windows (03 §4). Atomic blocks + parent-child are
-    inherited from HierarchicalChunker; only the child-splitting of prose changes."""
-
     name = "semantic"
 
     def __init__(

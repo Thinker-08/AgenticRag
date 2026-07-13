@@ -14,49 +14,49 @@ PORT      ?= 8000
 
 .PHONY: help venv install install-full pull-models up down run ingest ask eval lint fmt clean
 
-help: ## Show this help
+help:
 	@grep -hE '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
 		| awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-14s\033[0m %s\n", $$1, $$2}'
 
-venv: ## Create the ./.venv virtualenv
+venv:
 	python3 -m venv .venv
 	$(PIP) install -U pip
 
-install: venv ## Install the package + dev tools (local mode, no GPU/services)
+install: venv
 	$(PIP) install -e '.[dev]'
 
-install-full: venv ## Install every extra (ml/pdf/stores/obs/eval/dev) for the full stack
+install-full: venv
 	$(PIP) install -e '.[ml,pdf,stores,obs,eval,dev]'
 
-pull-models: ## Pull the Gemma tags into the running Ollama (gemma3:12b + gemma3:4b)
+pull-models:
 	docker compose exec ollama ollama pull gemma3:12b
 	docker compose exec ollama ollama pull gemma3:4b
 
-up: ## Start the full stack (Ollama, Qdrant, Redis, Langfuse, app)
+up:
 	docker compose up -d
 
-down: ## Stop the stack (add ARGS=-v to also drop volumes)
+down:
 	docker compose down $(ARGS)
 
-run: ## Run the API locally with uvicorn (AGRAG_CONFIG=$(CONFIG))
+run:
 	AGRAG_CONFIG=$(CONFIG) $(UVICORN) agrag.serving.app:app --host $(HOST) --port $(PORT) --reload
 
-ingest: ## Ingest a document: make ingest DOC=path/to/file
+ingest:
 	AGRAG_CONFIG=$(CONFIG) $(AGRAG) ingest --tenant $(TENANT) $(DOC)
 
-ask: ## Ask a question: make ask Q="your question"
+ask:
 	AGRAG_CONFIG=$(CONFIG) $(AGRAG) ask --tenant $(TENANT) "$(Q)"
 
-eval: ## Run the golden-set eval harness
+eval:
 	AGRAG_CONFIG=$(CONFIG) $(AGRAG) eval
 
-lint: ## Lint with ruff
+lint:
 	$(PY) -m ruff check src
 
-fmt: ## Auto-format + fix with ruff
+fmt:
 	$(PY) -m ruff format src
 	$(PY) -m ruff check --fix src
 
-clean: ## Remove caches and build artifacts (keeps .venv and data/)
+clean:
 	rm -rf build dist src/*.egg-info .ruff_cache .mypy_cache
 	find . -type d -name __pycache__ -prune -exec rm -rf {} +

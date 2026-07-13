@@ -1,9 +1,3 @@
-"""Execute a QueryPlan DAG (05 §4): topological layers, concurrent fan-out, sandboxed code steps.
-
-Independent steps in a layer run concurrently under a GPU-slot semaphore (C7/C8). Dependent steps run
-later so step-1's evidence feeds step-2. Code steps offload arithmetic to the sandbox (C30) — never the LLM.
-"""
-
 from __future__ import annotations
 
 import asyncio
@@ -141,8 +135,6 @@ class PlanExecutor:
     def _inject_deps(
         self, query: str, deps: list[str], results: dict[str, list[ScoredChunk]]
     ) -> str:
-        """Splice the top evidence sentence from each completed dependency into step-2's query so a
-        multi-hop hop conditions on step-1's answer (05 §4 `inject_deps`)."""
         ctx: list[str] = []
         for dep in deps:
             docs = results.get(dep) or []

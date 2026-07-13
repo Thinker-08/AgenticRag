@@ -1,11 +1,3 @@
-"""The promotion / regression gate (C27, design page 13).
-
-A phase is promotable only if it regresses no locked metric beyond tolerance versus the
-frozen control. `locked_floors` names the gated (higher-is-better) metrics with the committed
-step-1 baseline floors; the live floor for each metric is the control run's own value, falling
-back to the committed floor when the control lacks it.
-"""
-
 from __future__ import annotations
 
 locked_floors: dict[str, float] = {
@@ -33,11 +25,6 @@ def promote(
     control: dict,
     tol: dict | None = None,
 ) -> dict:
-    """Assert the candidate regresses no locked metric beyond tolerance vs the control.
-
-    Returns {"status": "PROMOTE", "delta": {...}} on success; raises AssertionError naming
-    the first offending metric otherwise.
-    """
     tols = {**DEFAULT_TOL, **(tol or {})}
     for metric in locked_floors:
         cand = candidate.get(metric)

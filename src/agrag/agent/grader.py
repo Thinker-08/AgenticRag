@@ -1,10 +1,3 @@
-"""Corrective-RAG evidence grader (05 §5): relevance and slot-sufficiency kept separate.
-
-Relevant-but-insufficient ("3 chunks all stating the same half") must not read as SUFFICIENT — a
-distinction a single 0-1 score hides. This heuristic backend is deterministic and calibratable;
-swap an NLI/LLM grader behind the same interface once validated against human labels (C28).
-"""
-
 from __future__ import annotations
 
 import re

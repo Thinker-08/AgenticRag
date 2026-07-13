@@ -1,11 +1,3 @@
-"""Sandboxed code tool (C30): the model sets up arithmetic symbolically; a deterministic sandbox runs it.
-
-The model-generated code is assumed hostile. Two layers: (1) an AST allowlist rejects imports,
-attribute access, dunders, and non-arithmetic calls before anything runs; (2) execution happens in a
-resource-capped, network-denied child process. gVisor/Firecracker are the production isolation
-primitive (08); this subprocess runner is the local/dev equivalent behind the same ToolRunner interface.
-"""
-
 from __future__ import annotations
 
 import ast

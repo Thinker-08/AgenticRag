@@ -1,8 +1,3 @@
-"""BM25 lexical index — the exact-token leg of hybrid retrieval (C5).
-Rebuilds the per-tenant BM25 matrix on demand; fine at portfolio scale. Nails part numbers,
-statute refs, tickers, and rare proper nouns that dense embeddings smear.
-"""
-
 from __future__ import annotations
 
 import asyncio

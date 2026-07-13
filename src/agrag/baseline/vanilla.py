@@ -1,10 +1,3 @@
-"""Vanilla single-shot RAG — the frozen control (page 01, page 13 step 1).
-
-extract → fixed chunk → embed → top-k → one grounded prompt → answer. No routing, no grading, no
-verification, no abstention. Built behind the SAME interfaces as the agent so it swaps in without
-touching callers; every phase reports the agent's quantified delta over this baseline (C22, C27).
-"""
-
 from __future__ import annotations
 
 import uuid

@@ -1,9 +1,3 @@
-"""Near-duplicate collapse via MinHash/LSH (C6): thin twins before spending rerank GPU passes.
-
-Estimates shingled-text Jaccard in near-linear time; keeps the highest-fused-rank member of each
-near-dup cluster and drops the rest so redundant boilerplate can't bias generation.
-"""
-
 from __future__ import annotations
 
 import re

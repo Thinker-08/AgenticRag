@@ -1,4 +1,3 @@
-# Keep the build context small and reproducible.
 .venv/
 venv/
 env/
@@ -11,22 +10,18 @@ dist/
 .ruff_cache/
 .mypy_cache/
 
-# Runtime data / model weights — bind-mounted or volume-backed, never baked in.
 data/
 models/
 *.gguf
 
-# Local env + secrets
 .env
 .env.*
 !.env.example
 
-# VCS / editor / OS cruft
 .git/
 .gitignore
 .idea/
 .vscode/
 .DS_Store
 
-# Docs and notes not needed at runtime
 v2/

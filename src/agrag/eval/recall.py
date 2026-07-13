@@ -1,11 +1,3 @@
-"""ANN recall measurement (C1, 04 §1): recall is empirical, never a spec-sheet number.
-
-Ground truth = brute-force exact cosine kNN over the indexed vectors — so it needs NO human labels.
-recall@k = |ANN_topk ∩ exact_topk| / k, averaged over sampled probe queries. Re-run after any
-rebuild, quantization change, or embedding swap: a silent 0.98→0.82 drop ships confident wrong
-answers with zero errors in the logs.
-"""
-
 from __future__ import annotations
 
 import numpy as np

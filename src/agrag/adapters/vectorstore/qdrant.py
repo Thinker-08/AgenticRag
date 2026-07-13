@@ -1,5 +1,3 @@
-"""Qdrant dense + sparse vector store (full mode). Tenant scoping is mandatory (C31)."""
-
 from __future__ import annotations
 
 import asyncio
@@ -14,8 +12,6 @@ if TYPE_CHECKING:
 
 
 class QdrantVectorStore:
-    """VectorStore backed by Qdrant with a named "dense" (cosine) + "sparse" vector."""
-
     def __init__(self, host: str, collection: str, dim: int, cfg: "VectorStoreConfig") -> None:
         try:
             from qdrant_client import AsyncQdrantClient
