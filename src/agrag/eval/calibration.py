@@ -30,9 +30,9 @@ def cohens_kappa(judge: list[bool], human: list[bool]) -> float:
 @dataclass
 class TauPoint:
     tau: float
-    correct_refusal: float     # recall on truly-unanswerable / ungrounded items
-    over_abstention: float     # answerable/grounded items wrongly refused
-    f_beta: float              # β<1 weights precision (avoiding hallucination) over recall
+    correct_refusal: float
+    over_abstention: float
+    f_beta: float
 
 
 def _fbeta(tp: int, fp: int, fn: int, beta: float) -> float:
@@ -59,14 +59,16 @@ def sweep_tau(
     n_ans = sum(1 for _, g in scored if g)
     n_unans = len(scored) - n_ans
     for tau in grid:
-        tp = sum(1 for s, g in scored if not g and s < tau)      # correctly refused ungrounded
-        fp = sum(1 for s, g in scored if g and s < tau)          # wrongly refused grounded
-        fn = sum(1 for s, g in scored if not g and s >= tau)     # ungrounded let through
-        curve.append(TauPoint(
-            tau=round(tau, 4),
-            correct_refusal=(tp / n_unans) if n_unans else 0.0,
-            over_abstention=(fp / n_ans) if n_ans else 0.0,
-            f_beta=round(_fbeta(tp, fp, fn, beta), 4),
-        ))
+        tp = sum(1 for s, g in scored if not g and s < tau)
+        fp = sum(1 for s, g in scored if g and s < tau)
+        fn = sum(1 for s, g in scored if not g and s >= tau)
+        curve.append(
+            TauPoint(
+                tau=round(tau, 4),
+                correct_refusal=(tp / n_unans) if n_unans else 0.0,
+                over_abstention=(fp / n_ans) if n_ans else 0.0,
+                f_beta=round(_fbeta(tp, fp, fn, beta), 4),
+            )
+        )
     best = max(curve, key=lambda p: (p.f_beta, p.tau))
     return best.tau, curve

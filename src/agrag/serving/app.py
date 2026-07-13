@@ -47,8 +47,6 @@ def create_app(settings=None) -> FastAPI:
     api = FastAPI(title="Agentic RAG", version="0.1.0")
 
     def _tenant(header_tenant: str | None, body_tenant: str) -> str:
-        # confused-deputy fix (08 threat 3): under auth the tenant comes from the header (a stand-in
-        # for the authenticated principal), never the client-controlled body.
         if deps.settings.serving.require_auth:
             if not header_tenant:
                 raise HTTPException(401, "X-Tenant-Id required (serving.require_auth is on)")
@@ -69,7 +67,9 @@ def create_app(settings=None) -> FastAPI:
         return stats.snapshot()
 
     @api.post("/ingest", response_model=JobHandle)
-    async def ingest(req: IngestRequest, x_tenant_id: str | None = Header(default=None)) -> JobHandle:
+    async def ingest(
+        req: IngestRequest, x_tenant_id: str | None = Header(default=None)
+    ) -> JobHandle:
         tenant = _tenant(x_tenant_id, req.tenant_id)
         if req.text is not None:
             doc = await ingestion.ingest_text(req.text, tenant_id=tenant, filename=req.filename)

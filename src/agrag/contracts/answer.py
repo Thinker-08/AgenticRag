@@ -64,7 +64,7 @@ class Draft(BaseModel):
     format: AnswerFormat = AnswerFormat.PROSE
     claims: list[DraftClaim] = Field(default_factory=list)
     computations: list[Computation] = Field(default_factory=list)
-    degraded: bool = False                       # produced by the small-model fallback tier (C14)
+    degraded: bool = False
 
 
 ABSTENTION_TEXT = "This is not stated in the provided document(s)."
@@ -80,9 +80,9 @@ class Answer(BaseModel):
     computations: list[Computation] = Field(default_factory=list)
     gaps: list[str] = Field(default_factory=list)
     abstention_reason: str | None = None
-    degraded: bool = False                       # served by a fallback tier (C14)
-    from_cache: bool = False                     # served from the answer cache (C18)
-    carried_entities: list[str] = Field(default_factory=list)  # feeds multi-turn session state
+    degraded: bool = False
+    from_cache: bool = False
+    carried_entities: list[str] = Field(default_factory=list)
 
     def sources(self) -> list[Citation]:
         out: list[Citation] = []

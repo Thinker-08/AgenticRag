@@ -74,8 +74,11 @@ class Table(BaseModel):
         rows = self.grid[self.n_header_rows :]
         headers = self.grid[: self.n_header_rows]
         total_idx = next(
-            (i for i in range(len(rows) - 1, -1, -1)
-             if rows[i] and rows[i][0].strip().lower().startswith(("total", "sum"))),
+            (
+                i
+                for i in range(len(rows) - 1, -1, -1)
+                if rows[i] and rows[i][0].strip().lower().startswith(("total", "sum"))
+            ),
             None,
         )
         if total_idx is None or total_idx == 0:
@@ -112,7 +115,7 @@ class Block(BaseModel):
     table: Optional[Table] = None
     image_ref: Optional[str] = None
     breadcrumb: list[str] = Field(default_factory=list)
-    links: list[str] = Field(default_factory=list)   # resolved cross-refs -> target block_ids
+    links: list[str] = Field(default_factory=list)
 
 
 class Page(BaseModel):

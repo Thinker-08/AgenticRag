@@ -42,7 +42,7 @@ class LoggingTracer:
     def span(self, name: str, **attrs):
         from ...security.pii import scrub_attrs
 
-        attrs = scrub_attrs(attrs)          # PII/raw-text never enters telemetry (08 threat 4)
+        attrs = scrub_attrs(attrs)
         depth = _depth.set(_depth.get() + 1)
         t0 = time.monotonic()
         self._log.info("span.start", span=name, trace_id=_trace_id.get(), **attrs)

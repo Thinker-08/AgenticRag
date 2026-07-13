@@ -24,7 +24,9 @@ class RedisSessionStore:
         turns = [Turn.model_validate_json(r) for r in raws]
         return Conversation(session_id=session_id, tenant_id=tenant_id, turns=turns)
 
-    async def append(self, tenant_id: str, session_id: str, turn: Turn, *, max_turns: int = 20) -> None:
+    async def append(
+        self, tenant_id: str, session_id: str, turn: Turn, *, max_turns: int = 20
+    ) -> None:
         key = self._key(tenant_id, session_id)
         pipe = self._redis.pipeline(transaction=True)
         pipe.rpush(key, turn.model_dump_json())

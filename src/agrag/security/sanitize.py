@@ -18,11 +18,11 @@ import re
 _ZW = "​"
 
 _PATTERNS = [
-    re.compile(r"<(\|im_(?:start|end)\|)>", re.IGNORECASE),          # ChatML
+    re.compile(r"<(\|im_(?:start|end)\|)>", re.IGNORECASE),
     re.compile(r"<(\|(?:system|user|assistant|end)\|)>", re.IGNORECASE),
-    re.compile(r"<((?:start|end)_of_turn)>", re.IGNORECASE),          # Gemma
-    re.compile(r"<(\|end(?:_of_text|oftext)\|)>", re.IGNORECASE),     # Llama3 / GPT-style
-    re.compile(r"\[(/?INST)\]"),                                      # Llama2
+    re.compile(r"<((?:start|end)_of_turn)>", re.IGNORECASE),
+    re.compile(r"<(\|end(?:_of_text|oftext)\|)>", re.IGNORECASE),
+    re.compile(r"\[(/?INST)\]"),
     re.compile(r"<<(/?SYS)>>"),
 ]
 
@@ -35,7 +35,7 @@ def neutralize_template_tokens(text: str) -> str:
     return text
 
 
-_MARK = "⁣"          # INVISIBLE SEPARATOR — rare, zero-width, survives copy
+_MARK = "⁣"
 _MARK_RE = re.compile(r"(\s+)")
 
 

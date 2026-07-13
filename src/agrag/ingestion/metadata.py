@@ -45,7 +45,7 @@ def doc_metadata(text: str) -> dict:
     if cur:
         meta["currency"] = cur
     years = _YEAR.findall(text)
-    if years:                                    # dominant reporting year of the doc
+    if years:
         meta["fiscal_year_dominant"] = int(Counter(years).most_common(1)[0][0])
     return meta
 
@@ -66,5 +66,7 @@ def enrich_metadata(chunks: list[Chunk], doc_text: str) -> list[Chunk]:
             extra["currency"] = cur
         for k, v in dmeta.items():
             extra.setdefault(k, v)
-        out.append(c.model_copy(update={"extra_metadata": extra}) if extra != c.extra_metadata else c)
+        out.append(
+            c.model_copy(update={"extra_metadata": extra}) if extra != c.extra_metadata else c
+        )
     return out

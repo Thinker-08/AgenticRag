@@ -42,7 +42,7 @@ def build_evidence_block(evidence: Evidence, nonce: str) -> str:
             + "]"
         )
         lines.append(header)
-        lines.append(datamark(c.text))          # spotlight the span as uniformly-quoted data (C29)
+        lines.append(datamark(c.text))
     lines.append(f"EVIDENCE_END>>> (nonce: {nonce})")
     return "\n".join(lines)
 
@@ -61,7 +61,7 @@ def parse_evidence_blocks(prompt: str) -> list[dict]:
                 "chunk_id": m.group("id"),
                 "doc_id": m.group("doc"),
                 "page": int(m.group("page")),
-                "text": strip_datamarks(m.group("text").strip()),   # clean quotes for grounding
+                "text": strip_datamarks(m.group("text").strip()),
             }
         )
     return out

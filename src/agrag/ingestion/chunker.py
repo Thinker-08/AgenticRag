@@ -39,7 +39,7 @@ def _mk_chunk(
     if all_links:
         meta["links"] = all_links
     if block and block.table and not block.table.checksum_ok:
-        meta["low_confidence_table"] = True         # subtotal reconciliation failed (03 stage 2)
+        meta["low_confidence_table"] = True
     return Chunk(
         chunk_id=cid,
         doc_id=doc.doc_id,
@@ -201,8 +201,9 @@ class SemanticChunker(HierarchicalChunker):
 
     name = "semantic"
 
-    def __init__(self, embedder, *, breakpoint_pctl: int = 90, child_size: int = 320,
-                 parent_size: int = 1500) -> None:
+    def __init__(
+        self, embedder, *, breakpoint_pctl: int = 90, child_size: int = 320, parent_size: int = 1500
+    ) -> None:
         super().__init__(child_size=child_size, parent_size=parent_size, overlap=0)
         self._embed = embedder
         self._pctl = breakpoint_pctl

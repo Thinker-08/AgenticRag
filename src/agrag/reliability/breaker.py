@@ -12,8 +12,9 @@ import time
 class CircuitBreaker:
     CLOSED, OPEN, HALF_OPEN = "closed", "open", "half_open"
 
-    def __init__(self, *, failures: int = 5, window_s: float = 30.0, cooldown_s: float = 15.0,
-                 clock=time) -> None:
+    def __init__(
+        self, *, failures: int = 5, window_s: float = 30.0, cooldown_s: float = 15.0, clock=time
+    ) -> None:
         self.failures = failures
         self.window_s = window_s
         self.cooldown_s = cooldown_s
@@ -29,7 +30,10 @@ class CircuitBreaker:
         return self._state
 
     def _maybe_half_open(self) -> None:
-        if self._state == self.OPEN and self._clock.monotonic() - self._opened_at >= self.cooldown_s:
+        if (
+            self._state == self.OPEN
+            and self._clock.monotonic() - self._opened_at >= self.cooldown_s
+        ):
             self._state = self.HALF_OPEN
             self._probe_out = False
 
@@ -50,7 +54,7 @@ class CircuitBreaker:
 
     def record_failure(self) -> None:
         now = self._clock.monotonic()
-        if self._state == self.HALF_OPEN:      # probe failed: back to Open, restart cooldown
+        if self._state == self.HALF_OPEN:
             self._state = self.OPEN
             self._opened_at = now
             self._probe_out = False

@@ -14,7 +14,9 @@ class MemorySessionStore:
             session_id=session_id, tenant_id=tenant_id
         )
 
-    async def append(self, tenant_id: str, session_id: str, turn: Turn, *, max_turns: int = 20) -> None:
+    async def append(
+        self, tenant_id: str, session_id: str, turn: Turn, *, max_turns: int = 20
+    ) -> None:
         convo = await self.get(tenant_id, session_id)
-        turns = (convo.turns + [turn])[-max_turns:]      # rolling window (05 §9)
+        turns = (convo.turns + [turn])[-max_turns:]
         self._c[(tenant_id, session_id)] = convo.model_copy(update={"turns": turns})

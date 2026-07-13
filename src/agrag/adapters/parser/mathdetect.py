@@ -11,7 +11,6 @@ import re
 _LATEX = re.compile(r"\\(?:frac|sum|int|sqrt|alpha|beta|sigma|cdot|times|left|right)\b|\$\$")
 _MATH_CHARS = set("=+−-*/^_{}()[]<>≈≤≥±×÷√∆πΣ∫∂∞")
 _WORD = re.compile(r"[A-Za-z]{3,}")
-# an assignment whose right side carries an arithmetic operator: "margin = (rev - cost) / rev"
 _ASSIGN = re.compile(r"^[A-Za-z_][\w ]{0,30}=\s*[^=].*[-+*/^()].*$")
 
 

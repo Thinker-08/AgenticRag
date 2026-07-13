@@ -39,13 +39,62 @@ _REFORMULATE = {
 }
 
 _ENTITY = re.compile(r"\b([A-Z][a-zA-Z0-9]+(?:\s+[A-Z][a-zA-Z0-9]+)*)\b")
-_ENTITY_STOP = {"What", "Which", "How", "Who", "When", "Where", "Why", "Tell", "Compare",
-                "Summarize", "List", "The", "In", "On", "For", "FY"}
+_ENTITY_STOP = {
+    "What",
+    "Which",
+    "How",
+    "Who",
+    "When",
+    "Where",
+    "Why",
+    "Tell",
+    "Compare",
+    "Summarize",
+    "List",
+    "The",
+    "In",
+    "On",
+    "For",
+    "FY",
+}
 
 
-_STOP = {"what", "which", "how", "who", "when", "where", "the", "a", "an", "of", "to", "in", "on",
-         "and", "or", "is", "are", "was", "were", "for", "with", "as", "at", "by", "from", "did",
-         "does", "about", "its", "their", "tell", "me", "compare", "vs"}
+_STOP = {
+    "what",
+    "which",
+    "how",
+    "who",
+    "when",
+    "where",
+    "the",
+    "a",
+    "an",
+    "of",
+    "to",
+    "in",
+    "on",
+    "and",
+    "or",
+    "is",
+    "are",
+    "was",
+    "were",
+    "for",
+    "with",
+    "as",
+    "at",
+    "by",
+    "from",
+    "did",
+    "does",
+    "about",
+    "its",
+    "their",
+    "tell",
+    "me",
+    "compare",
+    "vs",
+}
 
 
 def _content_tokens(text: str) -> set[str]:
@@ -75,13 +124,18 @@ class AgentGraph:
         history = state.get("history") or []
         if not history:
             ents = _entities(state["query"])
-            # a dangling pronoun with no history and no in-query antecedent is unresolvable -> clarify
-            dangling = bool(re.search(r"\b(it|its|they|their|those|these)\b", state["query"], re.I)) and not ents
+            dangling = (
+                bool(re.search(r"\b(it|its|they|their|those|these)\b", state["query"], re.I))
+                and not ents
+            )
             return {
                 "standalone_q": state["query"],
                 "carried_entities": ents,
-                "clarify": (f"Could you clarify what '{state['query'].strip()}' refers to?"
-                            if dangling else ""),
+                "clarify": (
+                    f"Could you clarify what '{state['query'].strip()}' refers to?"
+                    if dangling
+                    else ""
+                ),
             }
         last = next((t for t in reversed(history) if t.role == "assistant"), None)
         entities = last.carried_entities if last else []
@@ -94,8 +148,10 @@ class AgentGraph:
                 prompt, RewriteResult, timeout_s=state["budget"].call_timeout_s()
             )
             state["budget"].charge(llm_result.total_tokens)
-        clarify = "" if rewrite.resolved else (
-            f"Could you clarify what '{state['query'].strip()}' refers to?"
+        clarify = (
+            ""
+            if rewrite.resolved
+            else (f"Could you clarify what '{state['query'].strip()}' refers to?")
         )
         return {
             "standalone_q": rewrite.standalone_query or state["query"],
@@ -104,8 +160,6 @@ class AgentGraph:
         }
 
     async def n_clarify(self, state: AgentState) -> dict:
-        # unresolvable follow-up: ask ONE clarifying question instead of retrieving on a dangling
-        # reference (05 §8/§9). Terminal, tagged so eval separates it from a document-gap abstention.
         self.deps.tracer.event("clarify", question=state["clarify"])
         ans = abstain(state["trace_id"], "needs_clarification")
         ans.answer_text = state["clarify"]
@@ -182,7 +236,9 @@ class AgentGraph:
         try:
             critique, meta = await self.deps.small_llm.generate_structured(
                 f"Review this retrieval plan for redundant steps:\n{listing}",
-                PlanCritique, timeout_s=budget.call_timeout_s())
+                PlanCritique,
+                timeout_s=budget.call_timeout_s(),
+            )
             budget.charge(meta.total_tokens)
         except Exception:
             return plan
@@ -229,12 +285,11 @@ class AgentGraph:
         return {"evidence": evidence, "computations": comps or prior, "gaps": gaps}
 
     async def n_grade(self, state: AgentState) -> dict:
-        # A computed result (aggregation count / comparison arithmetic) IS the answer — its
-        # source chunks (bare list items) need not lexically overlap the query, so the code tool
-        # succeeding short-circuits the relevance grade (05 §8).
         comps = state.get("computations") or []
         if state["evidence"].scored and any(c.result is not None for c in comps):
-            grade = Grade(verdict=GradeVerdict.SUFFICIENT, max_relevance=1.0, rationale="tool result")
+            grade = Grade(
+                verdict=GradeVerdict.SUFFICIENT, max_relevance=1.0, rationale="tool result"
+            )
             self.deps.tracer.event("grade", verdict=grade.verdict, relevance=1.0, via="tool")
             return {"grade": grade}
         step = SubStep(step_id="grade", tool=Strategy.HYBRID, query=state["standalone_q"])
@@ -250,9 +305,6 @@ class AgentGraph:
         grade = state.get("grade")
         verdict = grade.verdict if grade else GradeVerdict.AMBIGUOUS
         missing_keyword = grade.missing_slots[0] if grade and grade.missing_slots else ""
-        # CRAG reformulation ladder (05 §5): AMBIGUOUS -> targeted keyword rewrite; IRRELEVANT ->
-        # switch strategy (dense->HyDE, then hybrid->BM25). Reformulate MUST change something each
-        # iteration, or an identical re-run burns a budgeted iteration for no new evidence.
         hyde = ""
         if verdict == GradeVerdict.IRRELEVANT:
             hyde = await self._hyde(state["standalone_q"], state["budget"])
@@ -266,17 +318,21 @@ class AgentGraph:
                 q = f"{q} {hyde}"
             new_steps.append(st.model_copy(update={"tool": tool, "query": q}))
         self.deps.tracer.event(
-            "reformulate", iters_left=state["budget"].iters_left, verdict=verdict, hyde=bool(hyde))
+            "reformulate", iters_left=state["budget"].iters_left, verdict=verdict, hyde=bool(hyde)
+        )
         return {"plan": state["plan"].model_copy(update={"sub_steps": new_steps})}
 
     async def _hyde(self, query: str, budget) -> str:
         """HyDE: draft a hypothetical answer and retrieve against it (04 §4). The hypothetical is
         used ONLY as a retrieval probe — never surfaced or cited — so a wrong guess can't leak in."""
-        prompt = (f"<query>{query}</query>\nWrite a one-sentence hypothetical answer to this "
-                  "question as it might appear in a document. Output only that sentence.")
+        prompt = (
+            f"<query>{query}</query>\nWrite a one-sentence hypothetical answer to this "
+            "question as it might appear in a document. Output only that sentence."
+        )
         try:
             res = await self.deps.small_llm.generate(
-                prompt, max_tokens=80, timeout_s=budget.call_timeout_s())
+                prompt, max_tokens=80, timeout_s=budget.call_timeout_s()
+            )
             budget.charge(res.total_tokens)
             return res.text.strip()[:200]
         except Exception:
@@ -330,7 +386,7 @@ class AgentGraph:
         )
         draft = state.get("draft")
         if draft is not None and draft.degraded:
-            ans.degraded = True                       # surface the fallback tier to the client (C14)
+            ans.degraded = True
         return {"answer": ans}
 
     async def n_abstain(self, state: AgentState) -> dict:
@@ -390,7 +446,9 @@ class AgentGraph:
 
         g.set_entry_point("contextualize")
         g.add_conditional_edges(
-            "contextualize", self.route_contextualize, {"clarify": "clarify", "classify": "classify"}
+            "contextualize",
+            self.route_contextualize,
+            {"clarify": "clarify", "classify": "classify"},
         )
         g.add_edge("clarify", END)
         g.add_conditional_edges(

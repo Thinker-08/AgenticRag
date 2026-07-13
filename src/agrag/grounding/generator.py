@@ -64,8 +64,12 @@ class Generator:
         fail the query (07 §2.5). Verification still runs, so a degraded answer is still grounded."""
         from ..reliability import Backpressure, CircuitOpen, RetriesExhausted
 
-        kwargs = dict(system=GEN_SYSTEM, temperature=0.0,
-                      max_tokens=self.deps.settings.llm.max_tokens, timeout_s=budget.call_timeout_s())
+        kwargs = dict(
+            system=GEN_SYSTEM,
+            temperature=0.0,
+            max_tokens=self.deps.settings.llm.max_tokens,
+            timeout_s=budget.call_timeout_s(),
+        )
         try:
             draft, meta = await self.deps.llm.generate_structured(user, Draft, **kwargs)
             budget.charge(meta.total_tokens)
@@ -76,23 +80,38 @@ class Generator:
             budget.charge(meta.total_tokens)
             return draft, True
 
-    def _aggregation_draft(self, evidence: Evidence, computations: list[Computation] | None) -> Draft:
+    def _aggregation_draft(
+        self, evidence: Evidence, computations: list[Computation] | None
+    ) -> Draft:
         """Each enumerated item is a verbatim quote of its own chunk -> trivially grounded; the count
         is the sandboxed computation. No LLM prose, so nothing to hallucinate (05 §8 / 06 §7)."""
         claims: list[DraftClaim] = []
         for sc in evidence.scored:
             c = sc.chunk
             text = c.text.strip()
-            claims.append(DraftClaim(
-                text=text,
-                citations=[Citation(chunk_id=c.chunk_id, doc_id=c.doc_id, page_no=c.page_no,
-                                    char_span=(0, len(c.text)), quote=text)],
-            ))
+            claims.append(
+                DraftClaim(
+                    text=text,
+                    citations=[
+                        Citation(
+                            chunk_id=c.chunk_id,
+                            doc_id=c.doc_id,
+                            page_no=c.page_no,
+                            char_span=(0, len(c.text)),
+                            quote=text,
+                        )
+                    ],
+                )
+            )
         count = None
-        for comp in (computations or []):
+        for comp in computations or []:
             if comp.result is not None:
                 count = comp.result
         header = f"{count} item(s) found:" if count is not None else "Items found:"
         body = header + "\n" + "\n".join(f"- {cl.text}" for cl in claims)
-        return Draft(answer_text=body, format=AnswerFormat.LIST, claims=claims,
-                     computations=list(computations or []))
+        return Draft(
+            answer_text=body,
+            format=AnswerFormat.LIST,
+            claims=claims,
+            computations=list(computations or []),
+        )

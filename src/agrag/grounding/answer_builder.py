@@ -59,7 +59,7 @@ def _render(intent: Intent, claims: list[Claim], comps: list[Computation]) -> st
     if fmt == AnswerFormat.LIST and len(parts) > 1:
         body = "\n".join(f"- {p}" for p in parts)
     elif fmt == AnswerFormat.TABLE and parts:
-        body = "\n".join(f"| {p} |" for p in parts)          # one row per compared target (06 §7)
+        body = "\n".join(f"| {p} |" for p in parts)
     else:
         body = " ".join(parts)
     for comp in comps:
@@ -77,7 +77,9 @@ def numeric_drift(answer_text: str, comps: list[Computation]) -> list[Computatio
         if c.result is None:
             continue
         want = _fmt_num(c.result).replace(",", "")
-        if want not in present and want.rstrip("0").rstrip(".") not in {p.rstrip("0").rstrip(".") for p in present}:
+        if want not in present and want.rstrip("0").rstrip(".") not in {
+            p.rstrip("0").rstrip(".") for p in present
+        }:
             drifted.append(c)
     return drifted
 
@@ -96,8 +98,6 @@ def build_answer(
     supported = [c for c in claims if c.support == SupportLabel.SUPPORTED]
     contradicted = [c for c in claims if c.support == SupportLabel.CONTRADICTED]
 
-    # Contradiction is surfaced, never silently dropped (05 §8 / 06 §6c): with no supported claim it
-    # is a hard whole-answer block; alongside supported claims it is flagged in the answer's gaps.
     if not supported:
         return abstain(trace_id, "contradicted" if contradicted else "no_evidence", gaps=gaps)
     for c in contradicted:
@@ -105,13 +105,14 @@ def build_answer(
 
     text = _render(intent, supported, computations)
 
-    # Grounded arithmetic integrity: the stated number must equal the sandbox result (06 §4).
     drift = numeric_drift(text, computations)
     if drift:
         gaps.append("computed value not reflected verbatim in the answer (numeric drift)")
 
     dropped = len(claims) - len(supported)
-    status = (AnswerStatus.PARTIAL if (gaps or dropped > 0 or contradicted) else AnswerStatus.ANSWERED)
+    status = (
+        AnswerStatus.PARTIAL if (gaps or dropped > 0 or contradicted) else AnswerStatus.ANSWERED
+    )
     return Answer(
         answer_id=_new_id(),
         trace_id=trace_id,

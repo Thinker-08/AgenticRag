@@ -22,7 +22,7 @@ from .mathdetect import looks_like_equation
 
 _OCR_DPI = 200
 _VISION_DPI = 150
-_MAX_RENDER_PX = 40_000_000          # ~40 MP render ceiling (image-dimension bomb guard)
+_MAX_RENDER_PX = 40_000_000
 _OCR_MIN_CHARS = 24
 _LANG_MIN_CHARS = 20
 _BOILERPLATE_MIN_PAGES = 3
@@ -85,7 +85,6 @@ class PymupdfParser:
                 self._merge_tables(page, tables_by_page.get(i, []))
                 self._order_blocks(page)
                 pages.append(page)
-                # decompression-bomb guard (08 threat 5): abort if extracted content dwarfs input bytes
                 extracted_chars += sum(len(b.text) for b in page.blocks)
                 if len(data) and extracted_chars / len(data) > self._cfg.max_inflate_ratio:
                     raise ValueError(
@@ -170,8 +169,6 @@ class PymupdfParser:
         )
 
     def _dpi_for(self, page, base_dpi: int) -> int:
-        # image-dimension guard (08 threat 5): scale DPI down so a giant page can't render a
-        # multi-gigapixel bitmap that OOMs the OCR/vision worker.
         rect = page.rect
         pts = max(1.0, float(rect.width)) * max(1.0, float(rect.height))
         px = pts * (base_dpi / 72.0) ** 2

@@ -22,8 +22,12 @@ async def measure_ann_recall(
 ) -> dict:
     chunks = await deps.docstore.list_chunks(tenant_id)
     if len(chunks) <= k:
-        return {"recall_at_k": 1.0, "n_probes": 0, "corpus": len(chunks),
-                "note": "corpus <= k; ANN is exact"}
+        return {
+            "recall_at_k": 1.0,
+            "n_probes": 0,
+            "corpus": len(chunks),
+            "note": "corpus <= k; ANN is exact",
+        }
 
     texts = [c.embed_input() for c in chunks]
     ids = [c.chunk_id for c in chunks]
@@ -38,7 +42,6 @@ async def measure_ann_recall(
     hits = 0
     for j, pi in enumerate(probes):
         exact = set(np.argsort(-(unit @ unit[pi]))[:k].tolist())
-        # measure the ANN candidate generator itself (dense-only), NOT the rerank funnel
         ann = await deps.vectorstore.search(qres.dense[j], tenant_id=tenant_id, top_k=k)
         ann_idx = {id_to_idx[sc.chunk.chunk_id] for sc in ann if sc.chunk.chunk_id in id_to_idx}
         hits += len(exact & ann_idx)

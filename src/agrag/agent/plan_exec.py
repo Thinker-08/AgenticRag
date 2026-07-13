@@ -68,7 +68,7 @@ class PlanExecutor:
                         return step, []
                     query, filters = step.query, None
                     if step.depends_on:
-                        query = self._inject_deps(query, step.depends_on, results)  # multi-hop (05 §4)
+                        query = self._inject_deps(query, step.depends_on, results)
                     if step.tool == Strategy.METADATA_FILTER:
                         query, filters = await self._self_query(query, budget)
                     docs = await self.deps.retriever.retrieve(
@@ -100,7 +100,8 @@ class PlanExecutor:
 
         step = plan.sub_steps[0]
         evidence, comp = await MapReduceAggregator(self.deps).aggregate(
-            step, tenant_id=tenant_id, budget=budget)
+            step, tenant_id=tenant_id, budget=budget
+        )
         gaps = list(evidence.gaps)
         if not evidence.scored:
             gaps.append(step.query)
@@ -137,7 +138,9 @@ class PlanExecutor:
                     )
         return scored + extra
 
-    def _inject_deps(self, query: str, deps: list[str], results: dict[str, list[ScoredChunk]]) -> str:
+    def _inject_deps(
+        self, query: str, deps: list[str], results: dict[str, list[ScoredChunk]]
+    ) -> str:
         """Splice the top evidence sentence from each completed dependency into step-2's query so a
         multi-hop hop conditions on step-1's answer (05 §4 `inject_deps`)."""
         ctx: list[str] = []

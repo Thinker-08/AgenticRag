@@ -38,7 +38,7 @@ class Document(BaseModel):
     indexed_at: Optional[str] = None
     embedding_model: str = ""
     embedding_version: str = ""
-    page_hashes: dict[int, str] = {}        # per-page content hash → Merkle-diff on re-upload (C20)
+    page_hashes: dict[int, str] = {}
     error: Optional[str] = None
 
     def progress(self) -> float:

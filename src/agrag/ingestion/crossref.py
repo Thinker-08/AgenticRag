@@ -19,7 +19,9 @@ from ..contracts import Block, BlockType, ParsedDoc
 
 _FOOTNOTE_DEF = re.compile(r"^\[(\d{1,2})\][.):]?\s+(\S.+)", re.DOTALL)
 _FOOTNOTE_REF = re.compile(r"\[(\d{1,2})\]")
-_FIG_TABLE_REF = re.compile(r"\b(?:see\s+)?(Figure|Fig\.?|Table|Exhibit)\s+(\d{1,3})\b", re.IGNORECASE)
+_FIG_TABLE_REF = re.compile(
+    r"\b(?:see\s+)?(Figure|Fig\.?|Table|Exhibit)\s+(\d{1,3})\b", re.IGNORECASE
+)
 _SECTION_REF = re.compile(r"(?:§|\bsection\s+)(\d+(?:\.\d+)*)", re.IGNORECASE)
 _CAPTION = re.compile(r"^(Figure|Fig\.?|Table|Exhibit)\s+(\d{1,3})\b", re.IGNORECASE)
 _HEADING_NUM = re.compile(r"^(\d+(?:\.\d+)*)[.)]?\s+\S")
@@ -38,7 +40,7 @@ def link_crossrefs(doc: ParsedDoc) -> None:
         return
 
     footnote_defs: dict[str, Block] = {}
-    targets: dict[str, str] = {}                      # "figure 3" / "section 2.1" -> block_id
+    targets: dict[str, str] = {}
     for b in blocks:
         text = b.text.strip()
         m = _FOOTNOTE_DEF.match(text)
@@ -81,5 +83,5 @@ def link_crossrefs(doc: ParsedDoc) -> None:
         if links:
             b.links = sorted(set(links))
 
-    for num in inlined:                               # definition now travels with its anchor
+    for num in inlined:
         footnote_defs[num].type = BlockType.FOOTER

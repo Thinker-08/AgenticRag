@@ -107,7 +107,9 @@ async def _calibrate(args) -> None:
     from .eval.calibration import cohens_kappa, sweep_tau
 
     rows = [json.loads(ln) for ln in Path(args.labels).read_text().splitlines() if ln.strip()]
-    scored = [(float(r["entail_score"]), bool(r["is_grounded"])) for r in rows if "entail_score" in r]
+    scored = [
+        (float(r["entail_score"]), bool(r["is_grounded"])) for r in rows if "entail_score" in r
+    ]
     best_tau, curve = sweep_tau(scored, beta=args.beta) if scored else (None, [])
     out: dict = {"best_tau": best_tau, "curve": [c.__dict__ for c in curve]}
     judged = [(bool(r["judge"]), bool(r["human"])) for r in rows if "judge" in r and "human" in r]
@@ -125,7 +127,11 @@ async def _recall(args) -> None:
     settings = _settings(args)
     harness = EvalHarness(settings, corpus=load_corpus(args.corpus))
     await harness.ingest_corpus(harness.corpus, tenant_id=args.tenant)
-    print(json.dumps(await measure_ann_recall(harness.deps, tenant_id=args.tenant, k=args.k), indent=2))
+    print(
+        json.dumps(
+            await measure_ann_recall(harness.deps, tenant_id=args.tenant, k=args.k), indent=2
+        )
+    )
 
 
 def _serve(args) -> None:
@@ -157,12 +163,19 @@ def main(argv=None) -> int:
     )
     eval_parser.add_argument("--golden", default="data/golden/sample.jsonl")
     eval_parser.add_argument("--corpus", default="data/golden/sample_corpus.jsonl")
-    eval_parser.add_argument("--gate", action="store_true", help="exit 1 if agentic regresses the control")
-    eval_parser.add_argument("--control", default=None,
-                             help="optional frozen-floors JSON; default gates vs the live baseline re-run (C27)")
+    eval_parser.add_argument(
+        "--gate", action="store_true", help="exit 1 if agentic regresses the control"
+    )
+    eval_parser.add_argument(
+        "--control",
+        default=None,
+        help="optional frozen-floors JSON; default gates vs the live baseline re-run (C27)",
+    )
 
     cal_parser = sub.add_parser("calibrate", parents=[common], help="sweep TAU + judge kappa (C28)")
-    cal_parser.add_argument("--labels", required=True, help="JSONL of labeled entail/judge/human rows")
+    cal_parser.add_argument(
+        "--labels", required=True, help="JSONL of labeled entail/judge/human rows"
+    )
     cal_parser.add_argument("--beta", type=float, default=0.5)
     cal_parser.add_argument("--kappa-min", type=float, default=0.6)
 
@@ -176,8 +189,13 @@ def main(argv=None) -> int:
     if args.cmd == "serve":
         _serve(args)
         return 0
-    runner = {"ingest": _ingest, "ask": _ask, "eval": _eval,
-              "calibrate": _calibrate, "recall": _recall}[args.cmd]
+    runner = {
+        "ingest": _ingest,
+        "ask": _ask,
+        "eval": _eval,
+        "calibrate": _calibrate,
+        "recall": _recall,
+    }[args.cmd]
     asyncio.run(runner(args))
     return 0
 

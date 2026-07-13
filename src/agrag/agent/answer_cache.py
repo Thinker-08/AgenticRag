@@ -58,7 +58,9 @@ class AnswerCache:
         return hashlib.blake2b(repr(docs).encode(), digest_size=8).hexdigest()
 
     def _exact_key(self, tenant_id: str, version: str, q: str, history_hash: str) -> str:
-        digest = hashlib.blake2b(f"{_norm_query(q)}|{history_hash}".encode(), digest_size=12).hexdigest()
+        digest = hashlib.blake2b(
+            f"{_norm_query(q)}|{history_hash}".encode(), digest_size=12
+        ).hexdigest()
         return f"ans:{tenant_id}:{version}:{digest}"
 
     def _sem_index_key(self, tenant_id: str, version: str) -> str:
@@ -74,7 +76,7 @@ class AnswerCache:
             ans = Answer.model_validate(exact)
             ans.from_cache = True
             return ans
-        if not self.semantic_enabled or history:      # semantic tier is single-turn only
+        if not self.semantic_enabled or history:
             return None
         return await self._semantic_get(tenant_id, version, query)
 
@@ -90,7 +92,7 @@ class AnswerCache:
             vec = np.asarray(entry["vec"], dtype=np.float32)
             sim = float(np.dot(qvec, vec) / (qn * (float(np.linalg.norm(vec)) or 1.0)))
             if sim >= self.threshold and sim > best_sim and set(entry["salient"]) == qsal:
-                best, best_sim = entry, sim            # lexical number guard: salient sets must match
+                best, best_sim = entry, sim
         if best is None:
             return None
         cached = await self.deps.cache.get(best["key"])
@@ -126,7 +128,7 @@ class AnswerCache:
         payload = await self.deps.cache.get_or_compute(key, _compute_payload, ttl_s=self.ttl)
         answer = Answer.model_validate(payload)
         if answer.status == AnswerStatus.ABSTAINED or answer.degraded:
-            await self.deps.cache.invalidate(key)      # coalesced, but not retained
+            await self.deps.cache.invalidate(key)
         elif self.semantic_enabled and not history:
             await self._semantic_put(tenant_id, version, query, key)
         return answer
@@ -137,4 +139,4 @@ class AnswerCache:
         vec = self.deps.embedding.encode_queries([query]).dense[0]
         index = [e for e in index if e["key"] != key]
         index.append({"key": key, "vec": vec, "salient": sorted(_salient(query))})
-        await self.deps.cache.set(idx_key, index[-self.max_entries:], ttl_s=self.ttl)
+        await self.deps.cache.set(idx_key, index[-self.max_entries :], ttl_s=self.ttl)

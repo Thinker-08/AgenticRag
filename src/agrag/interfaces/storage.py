@@ -69,7 +69,9 @@ class SessionStore(Protocol):
 
     async def get(self, tenant_id: str, session_id: str) -> Conversation: ...
 
-    async def append(self, tenant_id: str, session_id: str, turn: Turn, *, max_turns: int = 20) -> None: ...
+    async def append(
+        self, tenant_id: str, session_id: str, turn: Turn, *, max_turns: int = 20
+    ) -> None: ...
 
 
 @runtime_checkable

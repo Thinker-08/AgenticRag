@@ -60,14 +60,16 @@ class HybridRetriever:
         self.reranker = reranker
         self.cfg = cfg
         self.cache = cache
-        # per-dependency breakers (07 §2.3): a degraded reranker must not sink the query path
         self._dense_breaker = CircuitBreaker(failures=4, window_s=30, cooldown_s=15)
         self._rerank_breaker = CircuitBreaker(failures=4, window_s=30, cooldown_s=15)
 
-    async def _cache_key(self, query: str, tenant_id: str, strategy: Strategy, k: int, filters: dict) -> str:
-        # index size is a cheap version token: any upsert/delete invalidates the cached ranking
+    async def _cache_key(
+        self, query: str, tenant_id: str, strategy: Strategy, k: int, filters: dict
+    ) -> str:
         version = await self.vectorstore.count(tenant_id)
-        payload = json.dumps([query, tenant_id, strategy.value, k, filters, version], sort_keys=True, default=str)
+        payload = json.dumps(
+            [query, tenant_id, strategy.value, k, filters, version], sort_keys=True, default=str
+        )
         return "retr:" + hashlib.blake2b(payload.encode(), digest_size=12).hexdigest()
 
     async def retrieve(
@@ -80,7 +82,7 @@ class HybridRetriever:
         filters: dict | None = None,
         budget: Budget | None = None,
     ) -> list[ScoredChunk]:
-        if not tenant_id:                              # fail-closed: no query runs without a tenant scope (C31)
+        if not tenant_id:
             from ..security import SecurityError
 
             raise SecurityError("retrieval attempted with empty tenant scope")
@@ -95,11 +97,11 @@ class HybridRetriever:
         if self.cache is not None:
             key = await self._cache_key(query, tenant_id, strategy, k, filters)
             hit = await self.cache.get(key)
-            if hit is not None:  # retrieval-results cache (07 §4): skip ANN+BM25+RRF+rerank
+            if hit is not None:
                 return [ScoredChunk.model_validate(sc) for sc in hit]
 
         over_fetch = self.cfg.over_fetch
-        if use_dense and not self._dense_breaker.allow():   # vector store unhealthy -> BM25-only
+        if use_dense and not self._dense_breaker.allow():
             use_dense = False
         dense_task = self._dense(query, tenant_id, over_fetch, filters) if use_dense else _empty()
         bm25_task = (
@@ -124,7 +126,7 @@ class HybridRetriever:
         return reranked
 
     async def _rerank(self, query, deduped, top_k, budget) -> list[ScoredChunk]:
-        if not self._rerank_breaker.allow():           # reranker unhealthy -> fused order (C12/C14)
+        if not self._rerank_breaker.allow():
             return deduped[:top_k]
         try:
             out = await self.reranker.rerank(query, deduped, top_k=top_k, budget=budget)
@@ -132,7 +134,7 @@ class HybridRetriever:
             return out
         except Exception:
             self._rerank_breaker.record_failure()
-            return deduped[:top_k]                     # degrade to first-stage RRF ranking
+            return deduped[:top_k]
 
     async def _dense(
         self, query: str, tenant_id: str, top_k: int, filters: dict | None
@@ -145,7 +147,7 @@ class HybridRetriever:
             )
             self._dense_breaker.record_success()
         except EmbeddingContractError:
-            raise                                       # a contract violation must fail loud, not trip the breaker
+            raise
         except Exception:
             self._dense_breaker.record_failure()
             return []

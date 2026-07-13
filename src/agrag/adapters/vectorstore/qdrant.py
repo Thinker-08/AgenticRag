@@ -69,8 +69,6 @@ class QdrantVectorStore:
         from qdrant_client import models as qm
 
         qfilter = self._build_filter(qm, tenant_id, filters)
-        # under quantization, search the compressed index then rescore the ~4x-oversampled shortlist
-        # against full-precision vectors — compression buys the candidate list, fp buys the order (C2)
         quant = None
         if self._cfg.quantize != "none":
             quant = qm.QuantizationSearchParams(rescore=True, oversampling=4.0)

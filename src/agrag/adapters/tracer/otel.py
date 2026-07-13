@@ -25,7 +25,7 @@ class OtelTracer:
             self._maybe_add_otlp(provider, host)
             trace.set_tracer_provider(provider)
             self._tracer = trace.get_tracer("agrag")
-        except Exception:  # SDK missing / misconfigured -> no-op
+        except Exception:
             self._tracer = None
 
     def _maybe_add_otlp(self, provider, host: str) -> None:
@@ -36,10 +36,12 @@ class OtelTracer:
             endpoint = host or None
             provider.add_span_processor(BatchSpanProcessor(OTLPSpanExporter(endpoint=endpoint)))
         except Exception:
-            pass  # no exporter -> spans still created, just not shipped
+            pass
 
     @contextlib.contextmanager
-    def start_trace(self, name: str, *, trace_id: str, tenant_id: str, **attrs) -> AbstractContextManager:
+    def start_trace(
+        self, name: str, *, trace_id: str, tenant_id: str, **attrs
+    ) -> AbstractContextManager:
         if self._tracer is None:
             yield None
             return

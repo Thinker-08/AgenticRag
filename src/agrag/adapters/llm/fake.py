@@ -176,8 +176,6 @@ class FakeLLM:
         )
 
     def _mk_judgement(self, prompt: str, schema: Type[T]) -> T:
-        # gray-zone tie-break: mirror lexical entailment — a claim number absent from the evidence
-        # is the hallucinated-figure failure the verifier exists to catch.
         evidence = extract_tag(prompt, "evidence")
         claim = extract_tag(prompt, "claim")
         num = re.compile(r"-?\d[\d,]*\.?\d*")
@@ -193,11 +191,13 @@ class FakeLLM:
         blocks = parse_evidence_blocks(prompt)
         text = "\n".join(b["text"] for b in blocks) or prompt
         items: list[str] = []
-        for m in re.finditer(r"^\s*(?:[-*•]|\d+[.)])\s+(.+)$", text, re.MULTILINE):  # bullet/numbered
+        for m in re.finditer(r"^\s*(?:[-*•]|\d+[.)])\s+(.+)$", text, re.MULTILINE):
             items.append(m.group(1).strip())
-        for m in re.finditer(r"(?:Segment|Item|Name|Subsidiary):\s*([^.;\n]+)", text, re.IGNORECASE):
+        for m in re.finditer(
+            r"(?:Segment|Item|Name|Subsidiary):\s*([^.;\n]+)", text, re.IGNORECASE
+        ):
             items.append(m.group(1).strip())
-        if not items:  # fall back to a labeled inline list "A, B and C"
+        if not items:
             m = re.search(r":\s*([A-Z][^.\n]{3,120}(?:,[^.\n]+)+)", text)
             if m:
                 items = [p.strip() for p in re.split(r",|\band\b", m.group(1)) if p.strip()]
@@ -212,7 +212,7 @@ class FakeLLM:
         if pronoun and entities:
             standalone = f"{q} (regarding {', '.join(entities)})"
         elif pronoun and not entities:
-            resolved = False        # unbound referent, nothing in history to bind it -> clarify (05 §9)
+            resolved = False
         fields = schema.model_fields
         data = {}
         if "standalone_query" in fields:
@@ -224,7 +224,6 @@ class FakeLLM:
         return schema(**data)
 
     def _mk_plancritique(self, prompt: str, schema: Type[T]) -> T:
-        # flag steps whose (tool, query) duplicate an earlier one as redundant (05 §6)
         seen: set[tuple[str, str]] = set()
         redundant: list[str] = []
         for m in re.finditer(r"(\S+): tool=(\S+) q=(.+)", prompt):

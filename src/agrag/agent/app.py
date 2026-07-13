@@ -38,7 +38,6 @@ class AgentApp:
         session_id: str | None = None,
         budget: Budget | None = None,
     ) -> Answer:
-        # server-side session (C16): stateless replica reconstructs history from the store
         if session_id and history is None:
             convo = await self.deps.sessions.get(tenant_id, session_id)
             history = convo.window(6)
@@ -76,19 +75,24 @@ class AgentApp:
             answer.carried_entities = final.get("carried_entities") or []
             violation = scan_answer(answer, nonce=nonce_for(trace_id))
             if violation is not None:
-                # injection fingerprint in the output = failed verification: fail closed (07 §6)
                 self.deps.tracer.event("output_filter.blocked", violation=violation)
                 answer = abstain(trace_id, "injection_suspected")
             answer = await self._flag_still_indexing(answer, tenant_id)
         return answer
 
-    async def _persist_turns(self, tenant_id: str, session_id: str, query: str, answer: Answer) -> None:
+    async def _persist_turns(
+        self, tenant_id: str, session_id: str, query: str, answer: Answer
+    ) -> None:
         await self.deps.sessions.append(tenant_id, session_id, Turn(role="user", content=query))
         await self.deps.sessions.append(
             tenant_id,
             session_id,
-            Turn(role="assistant", content=answer.answer_text, citations=answer.sources(),
-                 carried_entities=answer.carried_entities),
+            Turn(
+                role="assistant",
+                content=answer.answer_text,
+                citations=answer.sources(),
+                carried_entities=answer.carried_entities,
+            ),
         )
 
     async def _flag_still_indexing(self, answer: Answer, tenant_id: str) -> Answer:

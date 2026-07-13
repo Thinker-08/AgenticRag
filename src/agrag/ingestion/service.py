@@ -159,7 +159,7 @@ class IngestionService:
                     await self._merkle_report(job.tenant_id, doc.filename, page_hashes)
                     chunks = self.deps.chunker.split(parsed)
                     doc_text = "\n".join(b.text for p in parsed.pages for b in p.blocks)
-                    chunks = enrich_metadata(chunks, doc_text)   # typed filterable fields (04 §6)
+                    chunks = enrich_metadata(chunks, doc_text)
                     chunks = tag_pii(chunks)
                     doc = doc.model_copy(update={"page_hashes": page_hashes})
 
@@ -202,19 +202,33 @@ class IngestionService:
 
         return {p.page_no: content_hash("\n".join(b.text for b in p.blocks)) for p in parsed.pages}
 
-    async def _merkle_report(self, tenant_id: str, filename: str, new_hashes: dict[int, str]) -> None:
+    async def _merkle_report(
+        self, tenant_id: str, filename: str, new_hashes: dict[int, str]
+    ) -> None:
         """Merkle diff (C20): on a same-file re-upload, report which pages changed. Unchanged pages'
         chunks are already skipped by the content-hash embed cache, so this makes re-index incremental."""
         if not filename:
             return
-        prior = next((d for d in await self.deps.docstore.list_docs(tenant_id)
-                      if d.filename == filename and d.status == JobState.READY and d.page_hashes), None)
+        prior = next(
+            (
+                d
+                for d in await self.deps.docstore.list_docs(tenant_id)
+                if d.filename == filename and d.status == JobState.READY and d.page_hashes
+            ),
+            None,
+        )
         if not prior:
             return
         changed = merkle_diff(prior.page_hashes, new_hashes)
-        reused = len(set(prior.page_hashes) & set(new_hashes)) - len(changed & set(prior.page_hashes))
-        self.deps.tracer.event("merkle.diff", changed_pages=sorted(changed),
-                               reused_pages=max(0, reused), total=len(new_hashes))
+        reused = len(set(prior.page_hashes) & set(new_hashes)) - len(
+            changed & set(prior.page_hashes)
+        )
+        self.deps.tracer.event(
+            "merkle.diff",
+            changed_pages=sorted(changed),
+            reused_pages=max(0, reused),
+            total=len(new_hashes),
+        )
 
     async def _supersede_prior_versions(self, doc: Document) -> None:
         """Blue/green on re-upload of an edited doc (C17/C20): deindex prior READY versions of the

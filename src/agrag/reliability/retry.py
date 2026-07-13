@@ -34,7 +34,7 @@ async def retry_async(
     last: BaseException | None = None
     for attempt in range(max_retries + 1):
         if budget is not None and budget.remaining_s() < _MIN_ATTEMPT_S:
-            break                                    # never start an attempt we cannot finish (C13)
+            break
         try:
             return await op()
         except retriable as exc:
