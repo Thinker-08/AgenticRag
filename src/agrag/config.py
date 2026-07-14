@@ -71,7 +71,7 @@ class TracerConfig(BaseModel):
 
 
 class ParserConfig(BaseModel):
-    provider: str = "text"
+    provider: str = "pymupdf"
     text_ratio_threshold: float = 0.1
     max_pages: int = 3000
     max_upload_mb: int = 100

@@ -137,11 +137,6 @@ def makeCache(settings: Settings):
 
 
 def makeParser(settings: Settings, vision_llm: LLM):
-    if settings.parser.provider == "text":
-        from .adapters.parser.text import TextParser
-
-        return TextParser()
-
     from .adapters.parser.pymupdf import PymupdfParser
 
     return PymupdfParser(cfg=settings.parser, vision_llm=vision_llm)
