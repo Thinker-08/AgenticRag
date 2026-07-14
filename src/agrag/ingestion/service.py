@@ -8,7 +8,7 @@ import structlog
 
 from ..contracts import TERMINAL_STATES, Document, Job, JobHandle, JobState, ParsedDoc
 from ..deps import Deps
-from .hashing import merkleDiff, sha256Bytes
+from .hashing import sha256Bytes
 from .jobs import JobQueue
 from .metadata import enrichMetadata
 from .stages import contextualize, embedAndIndex, tagPii
@@ -102,13 +102,10 @@ class IngestionService:
                     doc = await self.set(doc, JobState.CHUNKING, page_count=parsed.page_count)
 
                 with self.deps.tracer.span("chunk"):
-                    page_hashes = self.pageHashes(parsed)
-                    await self.merkleReport(job.tenant_id, doc.filename, page_hashes)
                     chunks = self.deps.chunker.split(parsed)
                     doc_text = "\n".join(b.text for p in parsed.pages for b in p.blocks)
                     chunks = enrichMetadata(chunks, doc_text)
                     chunks = tagPii(chunks)
-                    doc = doc.model_copy(update={"page_hashes": page_hashes})
 
                 with self.deps.tracer.span("contextualize", n=len(chunks)):
                     doc = await self.set(doc, JobState.CONTEXTUALIZING)
@@ -128,23 +125,6 @@ class IngestionService:
                 state = JobState.QUARANTINED if isHostile(exc) else JobState.FAILED
                 await self.set(doc, state, error=f"{type(exc).__name__}: {exc}")
                 log.warning("ingest.failed", doc_id=job.doc_id, error=str(exc), state=state.value)
-
-    def pageHashes(self, parsed: ParsedDoc) -> dict[int, str]:
-        from .hashing import contentHash
-
-        return {p.page_no: contentHash("\n".join(b.text for b in p.blocks)) for p in parsed.pages}
-
-    async def merkleReport(self, tenant_id: str, filename: str, new_hashes: dict[int, str]) -> None:
-        if not filename:
-            return
-
-        prior = next((d for d in await self.deps.docstore.listDocs(tenant_id) if d.filename == filename and d.status == JobState.READY and d.page_hashes), None)
-        if not prior:
-            return
-
-        changed = merkleDiff(prior.page_hashes, new_hashes)
-        reused = len(set(prior.page_hashes) & set(new_hashes)) - len(changed & set(prior.page_hashes))
-        self.deps.tracer.event("merkle.diff", changed_pages=sorted(changed), reused_pages=max(0, reused), total=len(new_hashes))
 
     async def supersedePriorVersions(self, doc: Document) -> None:
         if not doc.filename:
