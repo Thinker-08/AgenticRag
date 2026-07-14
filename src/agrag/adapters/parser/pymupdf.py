@@ -89,10 +89,14 @@ class PymupdfParser:
 
         if ratio >= self._cfg.text_ratio_threshold:
             blocks = self.digitalBlocks(page, i, doc_id, w)
-            return Page(tier=ParseTier.DIGITAL, blocks=blocks, **base), None
+            if blocks:
+                return Page(tier=ParseTier.DIGITAL, blocks=blocks, **base), None
 
         if self._pytesseract is not None:
-            ocr_text = self.clean(self.ocrPage(page))
+            try:
+                ocr_text = self.clean(self.ocrPage(page))
+            except Exception:
+                ocr_text = ""
             if len(ocr_text.strip()) >= _OCR_MIN_CHARS:
                 block = self.singleBlock(doc_id, i, ocr_text, (0.0, 0.0, w, h))
                 return Page(tier=ParseTier.OCR, blocks=[block], **base), None
