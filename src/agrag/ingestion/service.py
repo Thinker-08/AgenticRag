@@ -8,7 +8,6 @@ import structlog
 
 from ..contracts import TERMINAL_STATES, Document, Job, JobHandle, JobState, ParsedDoc
 from ..deps import Deps
-from .crossref import linkCrossrefs
 from .hashing import merkleDiff, sha256Bytes
 from .jobs import JobQueue
 from .metadata import enrichMetadata
@@ -103,7 +102,6 @@ class IngestionService:
                     doc = await self.set(doc, JobState.CHUNKING, page_count=parsed.page_count)
 
                 with self.deps.tracer.span("chunk"):
-                    linkCrossrefs(parsed)
                     page_hashes = self.pageHashes(parsed)
                     await self.merkleReport(job.tenant_id, doc.filename, page_hashes)
                     chunks = self.deps.chunker.split(parsed)
