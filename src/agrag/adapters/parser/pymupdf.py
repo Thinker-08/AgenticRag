@@ -4,7 +4,6 @@ import asyncio
 import importlib
 import re
 import unicodedata
-from collections import defaultdict
 
 from ...config import ParserConfig
 from ...contracts import Block, BlockType, Page, ParsedDoc, ParseTier
@@ -18,8 +17,6 @@ _VISION_MAX_TOKENS = 4096
 _MAX_RENDER_PX = 40_000_000
 _OCR_MIN_CHARS = 24
 _LANG_MIN_CHARS = 20
-_BOILERPLATE_MIN_PAGES = 3
-_BOILERPLATE_RATIO = 0.4
 _VISION_PROMPT = "Transcribe all readable text from this scanned document page in natural reading order. Return only the transcription, with no commentary."
 
 
@@ -71,7 +68,6 @@ class PymupdfParser:
                 if len(data) and extracted_chars / len(data) > self._cfg.max_inflate_ratio:
                     raise ValueError(f"decompressed/input ratio exceeds max_inflate_ratio={self._cfg.max_inflate_ratio} (suspected inflate bomb)")
 
-            self.stripBoilerplate(pages)
             summary = self.docSummary(pages, filename)
         finally:
             doc.close()
@@ -163,30 +159,6 @@ class PymupdfParser:
     @staticmethod
     def colBucket(x0: float, width: float) -> int:
         return 0 if width <= 0 or x0 < width * 0.5 else 1
-
-    def stripBoilerplate(self, pages: list[Page]) -> None:
-        if len(pages) < _BOILERPLATE_MIN_PAGES:
-            return
-
-        key_pages: dict[tuple, set[int]] = defaultdict(set)
-        for p in pages:
-            for b in p.blocks:
-                key_pages[self.boilerKey(b)].add(p.page_no)
-
-        n = len(pages)
-        boiler = {k for k, ps in key_pages.items() if len(ps) / n > _BOILERPLATE_RATIO}
-        if not boiler:
-            return
-
-        for p in pages:
-            p.blocks = [b for b in p.blocks if self.boilerKey(b) not in boiler]
-            for order, b in enumerate(p.blocks):
-                b.reading_order = order
-
-    @staticmethod
-    def boilerKey(b: Block) -> tuple:
-        norm = re.sub(r"\s+", " ", b.text.strip().lower())
-        return (round(b.bbox[0] / 2.0), round(b.bbox[1] / 2.0), round(b.bbox[2] / 2.0), round(b.bbox[3] / 2.0), norm)
 
     def clean(self, text: str) -> str:
         if self._ftfy is not None:
