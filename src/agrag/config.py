@@ -14,6 +14,7 @@ class LLMConfig(BaseModel):
     small_model: str = "gemma3:4b"
     host: str = "http://localhost:11434"
     max_tokens: int = 1024
+    num_ctx: int = 8192
     temperature: float = 0.0
 
 

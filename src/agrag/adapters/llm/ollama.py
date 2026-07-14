@@ -19,11 +19,12 @@ _RETRIABLE = (httpx.TransportError, httpx.HTTPStatusError, httpx.TimeoutExceptio
 class OllamaLLM:
     name: str
 
-    def __init__(self, model: str, host: str, default_max_tokens: int = 1024, *, reliability: ReliabilityConfig | None = None, slots: int = 4, breaker: CircuitBreaker | None = None) -> None:
+    def __init__(self, model: str, host: str, default_max_tokens: int = 1024, *, num_ctx: int = 8192, reliability: ReliabilityConfig | None = None, slots: int = 4, breaker: CircuitBreaker | None = None) -> None:
         self.model = model
         self.name = model
         self.host = host.rstrip("/")
         self.default_max_tokens = default_max_tokens
+        self.num_ctx = num_ctx
 
         self._client = httpx.AsyncClient(base_url=self.host, timeout=httpx.Timeout(300.0))
         self._rel = reliability or ReliabilityConfig()
@@ -31,7 +32,7 @@ class OllamaLLM:
         self._breaker = breaker or CircuitBreaker(failures=self._rel.breaker_failures, window_s=self._rel.breaker_window_s, cooldown_s=self._rel.breaker_cooldown_s)
 
     def payload(self, prompt: str, system: str | None, max_tokens: int, temperature: float, images: Sequence[bytes] | None) -> dict[str, Any]:
-        payload: dict[str, Any] = {"model": self.model, "prompt": prompt, "stream": False, "options": {"temperature": temperature, "num_predict": max_tokens}}
+        payload: dict[str, Any] = {"model": self.model, "prompt": prompt, "stream": False, "options": {"temperature": temperature, "num_predict": max_tokens, "num_ctx": self.num_ctx}}
         if system is not None:
             payload["system"] = system
         if images:

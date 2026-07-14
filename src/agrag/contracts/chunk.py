@@ -12,7 +12,6 @@ class ChunkKind(str, Enum):
     EQUATION = "equation"
     LIST = "list"
     CODE = "code"
-    SUMMARY = "summary"
 
 
 class Chunk(BaseModel):
@@ -39,6 +38,3 @@ class Chunk(BaseModel):
     def embedInput(self) -> str:
         body = self.linearized_text or self.text
         return f"{self.context_blurb}\n\n{body}".strip() if self.context_blurb else body
-
-    def embedCacheKey(self) -> str:
-        return f"{self.content_hash}:{self.embedding_version}"

@@ -72,9 +72,6 @@ class IngestionService:
 
         return await self.deps.docstore.getDoc(tenant_id, doc_id)
 
-    async def ingestText(self, text: str, *, tenant_id: str = "default", filename: str = "", doc_id: str | None = None) -> Document:
-        return await self.ingest(text.encode("utf-8"), tenant_id=tenant_id, filename=filename or "text.txt", doc_id=doc_id)
-
     async def status(self, tenant_id: str, doc_id: str) -> Document | None:
         return await self.deps.docstore.getDoc(tenant_id, doc_id)
 
@@ -99,7 +96,7 @@ class IngestionService:
                     doc = await self.set(doc, JobState.PARSING)
                     parsed: ParsedDoc = await asyncio.wait_for(self.deps.parser.parse(data, doc_id=job.doc_id, tenant_id=job.tenant_id, filename=doc.filename), timeout=self.deps.settings.parser.parse_timeout_s)
                     parsed.content_hash = job.content_hash
-                    doc = await self.set(doc, JobState.CHUNKING, page_count=parsed.page_count)
+                    doc = await self.set(doc, JobState.CHUNKING, page_count=parsed.page_count, pages_done=parsed.page_count)
 
                 with self.deps.tracer.span("chunk"):
                     chunks = self.deps.chunker.split(parsed)
@@ -109,14 +106,17 @@ class IngestionService:
 
                 with self.deps.tracer.span("contextualize", n=len(chunks)):
                     doc = await self.set(doc, JobState.CONTEXTUALIZING)
-                    chunks = await contextualize(chunks, parsed.doc_summary, self.deps.small_llm, self.deps.cache)
+                    chunks = await contextualize(chunks, parsed.doc_title, self.deps.small_llm, self.deps.cache, doc_excerpt=doc_text)
 
                 with self.deps.tracer.span("embed_index"):
                     doc = await self.set(doc, JobState.EMBEDDING)
                     indexed = await embedAndIndex(chunks, embedding=self.deps.embedding, vectorstore=self.deps.vectorstore, lexical=self.deps.lexical, docstore=self.deps.docstore, cache=self.deps.cache)
 
                 await self.set(doc, JobState.READY, indexed_at=now(), pages_done=parsed.page_count)
-                await self.supersedePriorVersions(doc)
+                try:
+                    await self.supersedePriorVersions(doc)
+                except Exception as exc:
+                    log.warning("ingest.supersede_failed", doc_id=job.doc_id, error=f"{type(exc).__name__}: {exc}")
                 self.deps.tracer.event("ingest.ready", doc_id=job.doc_id, chunks=len(indexed))
             except asyncio.TimeoutError:
                 await self.set(doc, JobState.QUARANTINED, error=f"parse exceeded {self.deps.settings.parser.parse_timeout_s}s (suspected PDF-bomb)")
@@ -134,6 +134,7 @@ class IngestionService:
             if prior.doc_id != doc.doc_id and prior.filename == doc.filename and prior.status == JobState.READY and prior.content_hash != doc.content_hash:
                 await self.deps.vectorstore.deleteDoc(prior.doc_id, doc.tenant_id)
                 await self.deps.lexical.deleteDoc(prior.doc_id, doc.tenant_id)
+                await self.deps.docstore.deleteChunks(prior.doc_id, doc.tenant_id)
                 await self.deps.docstore.upsertDoc(prior.model_copy(update={"status": JobState.SUPERSEDED}))
                 self.deps.tracer.event("ingest.superseded", old_doc=prior.doc_id, new_doc=doc.doc_id)
 

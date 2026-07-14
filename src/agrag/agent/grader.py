@@ -28,17 +28,19 @@ class HeuristicGrader:
         ev_text = []
 
         for sc in candidates:
-            toks = content(sc.chunk.text)
+            text = f"{sc.chunk.context_blurb} {sc.chunk.text}" if sc.chunk.context_blurb else sc.chunk.text
+            toks = content(text)
             rel = max(rel, len(q & toks) / len(q))
             union |= toks
-            ev_text.append(sc.chunk.text)
+            ev_text.append(text)
 
         covered = q & union
         coverage = len(covered) / len(q)
         missing = sorted(q - covered)
 
         q_years = set(_YEAR.findall(step.query))
-        if q_years and not (q_years & set(_YEAR.findall(" ".join(ev_text)))):
+        ev_years = set(_YEAR.findall(" ".join(ev_text))) | {str(sc.chunk.extra_metadata["fiscal_year"]) for sc in candidates if sc.chunk.extra_metadata.get("fiscal_year")}
+        if q_years and not (q_years & ev_years):
             return Grade(verdict=GradeVerdict.IRRELEVANT, max_relevance=round(rel, 3), missing_slots=sorted(q_years), rationale="queried period absent from evidence")
 
         if coverage >= 0.6 or (rel >= min(self.floor, 0.5) and coverage >= 0.4):

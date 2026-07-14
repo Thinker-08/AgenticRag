@@ -8,7 +8,7 @@ from pydantic import BaseModel
 
 from ..config import loadSettings
 from ..container import buildDeps
-from ..contracts import Answer, JobHandle, JobState, Turn
+from ..contracts import Answer, JobHandle, Turn
 from ..deps import Deps
 from ..ingestion.service import IngestionService
 
@@ -16,7 +16,6 @@ from ..ingestion.service import IngestionService
 class IngestRequest(BaseModel):
     tenant_id: str = "default"
     filename: str = ""
-    text: str | None = None
     content_base64: str | None = None
 
 
@@ -39,20 +38,17 @@ def createApp(settings=None) -> FastAPI:
 
     @api.post("/ingest", response_model=JobHandle)
     async def ingest(req: IngestRequest) -> JobHandle:
-        if req.text is not None:
-            doc = await ingestion.ingestText(req.text, tenant_id=req.tenant_id, filename=req.filename)
-            if doc.status != JobState.READY:
-                raise HTTPException(422, f"ingest {doc.status.value}: {doc.error or 'see /docs status'}")
-            return JobHandle(doc_id=doc.doc_id, status="ready")
+        if not req.content_base64:
+            raise HTTPException(400, "provide `content_base64`")
 
-        if req.content_base64:
-            try:
-                data = base64.b64decode(req.content_base64, validate=True)
-            except (binascii.Error, ValueError) as exc:
-                raise HTTPException(400, f"content_base64 is not valid base64: {exc}") from exc
-            return await ingestion.submit(data, tenant_id=req.tenant_id, filename=req.filename)
+        try:
+            data = base64.b64decode(req.content_base64, validate=True)
+        except (binascii.Error, ValueError) as exc:
+            raise HTTPException(400, f"content_base64 is not valid base64: {exc}") from exc
+        if not data.startswith(b"%PDF-"):
+            raise HTTPException(400, "only PDF uploads are supported")
 
-        raise HTTPException(400, "provide either `text` or `content_base64`")
+        return await ingestion.submit(data, tenant_id=req.tenant_id, filename=req.filename)
 
     @api.get("/docs/{tenant_id}/{doc_id}")
     async def docStatus(tenant_id: str, doc_id: str) -> dict:

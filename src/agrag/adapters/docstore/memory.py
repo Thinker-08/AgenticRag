@@ -28,6 +28,9 @@ class MemoryDocStore:
         for c in chunks:
             self._chunks[(c.tenant_id, c.chunk_id)] = c
 
+    async def deleteChunks(self, doc_id: str, tenant_id: str) -> None:
+        self._chunks = {k: c for k, c in self._chunks.items() if not (k[0] == tenant_id and c.doc_id == doc_id)}
+
     async def getChunk(self, tenant_id: str, chunk_id: str) -> Chunk | None:
         return self._chunks.get((tenant_id, chunk_id))
 

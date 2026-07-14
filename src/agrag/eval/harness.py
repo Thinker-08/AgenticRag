@@ -12,6 +12,22 @@ from .golden import GoldenCorpusDoc, GoldenItem
 from .metrics import citationAccuracy, contextPrecision, correctRefusal, exactMatch, faithfulness, metricsOver, overAbstention, recallAtK, tokenF1
 
 
+def textToPdf(text: str) -> bytes:
+    import textwrap
+
+    import fitz
+
+    lines: list[str] = []
+    for raw in text.splitlines() or [""]:
+        lines.extend(textwrap.wrap(raw, width=95) or [""])
+
+    doc = fitz.open()
+    for i in range(0, max(len(lines), 1), 60):
+        page = doc.new_page()
+        page.insert_text((40, 50), "\n".join(lines[i : i + 60]), fontsize=10)
+    return doc.tobytes()
+
+
 class EvalItemResult(BaseModel):
     item: GoldenItem
     answer: Answer
@@ -63,7 +79,7 @@ class EvalHarness:
             key = (tenant_id, cd.doc_id)
             if key in self._ingested:
                 continue
-            doc = await ingestion.ingestText(cd.text, tenant_id=tenant_id, filename=cd.filename or cd.doc_id, doc_id=cd.doc_id)
+            doc = await ingestion.ingest(textToPdf(cd.text), tenant_id=tenant_id, filename=cd.filename or cd.doc_id, doc_id=cd.doc_id)
             self._ingested.add(key)
             docs.append(doc)
 

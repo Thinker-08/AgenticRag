@@ -33,7 +33,7 @@ def makeLlm(settings: Settings, model: str) -> LLM:
     if settings.llm.provider == "ollama":
         from .adapters.llm.ollama import OllamaLLM
 
-        return OllamaLLM(model=model, host=settings.llm.host, default_max_tokens=settings.llm.max_tokens, reliability=settings.reliability, slots=settings.agent.slot_concurrency)
+        return OllamaLLM(model=model, host=settings.llm.host, default_max_tokens=settings.llm.max_tokens, num_ctx=settings.llm.num_ctx, reliability=settings.reliability, slots=settings.agent.slot_concurrency)
 
     raise ValueError(f"unknown llm provider {settings.llm.provider}")
 

@@ -34,7 +34,7 @@ class Bm25Index:
     def _model(self, tenant_id: str):
         if tenant_id in self._dirty or tenant_id not in self._models:
             chunks = list(self._chunks.get(tenant_id, []))
-            corpus = [tokenize(c.linearized_text or c.text) for c in chunks]
+            corpus = [tokenize(c.embedInput()) for c in chunks]
             self._models[tenant_id] = (BM25Okapi(corpus, k1=self.k1, b=self.b) if corpus else None, chunks)
             self._dirty.discard(tenant_id)
 

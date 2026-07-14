@@ -38,7 +38,7 @@ class BgeReranker:
         if budget is not None and budget.exceeded():
             return cands[:top_k]
 
-        pairs = [(query, sc.chunk.text) for sc in cands]
+        pairs = [(query, sc.chunk.embedInput()) for sc in cands]
         scores = await asyncio.to_thread(self.score, pairs)
         for sc, s in zip(cands, scores):
             sc.rerank_score = float(s)

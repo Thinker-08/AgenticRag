@@ -49,6 +49,18 @@ class RedisDocStore:
 
         await pipe.execute()
 
+    async def deleteChunks(self, doc_id: str, tenant_id: str) -> None:
+        prefix = f"agrag:chunk:{tenant_id}:"
+        keys = [k async for k in self._redis.scan_iter(match=f"{prefix}{doc_id}:*")]
+        if not keys:
+            return
+
+        pipe = self._redis.pipeline(transaction=False)
+        for k in keys:
+            pipe.delete(k)
+        pipe.srem(self.chunkIndexKey(tenant_id), *[k[len(prefix):] for k in keys])
+        await pipe.execute()
+
     async def getChunk(self, tenant_id: str, chunk_id: str) -> Chunk | None:
         raw = await self._redis.get(self.chunkKey(tenant_id, chunk_id))
         return Chunk.model_validate_json(raw) if raw else None

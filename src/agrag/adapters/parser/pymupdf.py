@@ -68,11 +68,12 @@ class PymupdfParser:
                 if len(data) and extracted_chars / len(data) > self._cfg.max_inflate_ratio:
                     raise ValueError(f"decompressed/input ratio exceeds max_inflate_ratio={self._cfg.max_inflate_ratio} (suspected inflate bomb)")
 
-            summary = self.docSummary(pages, filename)
+            meta_title = ((doc.metadata or {}).get("title") or "").strip()
+            title = self.docTitle(pages, filename, meta_title)
         finally:
             doc.close()
 
-        return ParsedDoc(doc_id=doc_id, tenant_id=tenant_id, content_hash="", filename=filename, page_count=len(pages), pages=pages, doc_summary=summary)
+        return ParsedDoc(doc_id=doc_id, tenant_id=tenant_id, content_hash="", filename=filename, page_count=len(pages), pages=pages, doc_title=title)
 
     def processPage(self, doc, i: int, doc_id: str) -> tuple[Page, bytes | None]:
         page = doc[i]
@@ -178,17 +179,27 @@ class PymupdfParser:
         code = getattr(lang, "iso_code_639_1", None) if lang is not None else None
         return code.name.lower() if code is not None else "en"
 
-    def docSummary(self, pages: list[Page], filename: str) -> str:
-        title = ""
-        for p in pages:
-            for b in p.blocks:
-                t = b.text.strip()
-                if t and "\n" not in t and len(t) <= 120:
-                    b.type = BlockType.TITLE
-                    title = t
-                    break
-            if title:
+    def docTitle(self, pages: list[Page], filename: str, meta_title: str = "") -> str:
+        title = meta_title if self.titleLike(meta_title) else ""
+
+        if not title:
+            for p in pages:
+                if not p.blocks:
+                    continue
+                for b in p.blocks[:5]:
+                    cand = b.text.strip().split("\n", 1)[0].strip()
+                    if self.titleLike(cand):
+                        title = cand
+                        break
                 break
 
         parts = [x for x in (title, filename) if x]
         return " — ".join(parts)
+
+    @staticmethod
+    def titleLike(s: str) -> bool:
+        if not (4 <= len(s) <= 120):
+            return False
+
+        alpha = sum(1 for ch in s if ch.isalpha())
+        return alpha >= 2 and alpha / len(s) >= 0.4

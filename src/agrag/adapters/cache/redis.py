@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import asyncio
 import json
+import uuid
 from typing import Any, Awaitable, Callable
 
-_LOCK_TTL_S = 30
+_LOCK_TTL_S = 120
 _POLL_INTERVAL_S = 0.1
-_POLL_MAX = 300
+_POLL_MAX = 1200
+_UNLOCK_LUA = "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) end return 0"
 
 
 class RedisCache:
@@ -40,14 +42,15 @@ class RedisCache:
             return cached
 
         lock_key = f"{key}:lock"
+        token = uuid.uuid4().hex
         for _ in range(_POLL_MAX):
-            if await self._redis.set(lock_key, "1", nx=True, ex=_LOCK_TTL_S):
+            if await self._redis.set(lock_key, token, nx=True, ex=_LOCK_TTL_S):
                 try:
                     value = await compute()
                     await self.set(key, value, ttl_s)
                     return value
                 finally:
-                    await self._redis.delete(lock_key)
+                    await self._redis.eval(_UNLOCK_LUA, 1, lock_key, token)
 
             await asyncio.sleep(_POLL_INTERVAL_S)
             cached = await self.get(key)

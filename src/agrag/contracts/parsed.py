@@ -54,5 +54,5 @@ class ParsedDoc(BaseModel):
     filename: str = ""
     page_count: int = 0
     pages: list[Page] = Field(default_factory=list)
-    doc_summary: str = ""
+    doc_title: str = ""
     extra_metadata: dict = Field(default_factory=dict)
