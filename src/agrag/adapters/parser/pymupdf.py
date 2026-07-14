@@ -14,6 +14,7 @@ from .mathdetect import looksLikeEquation
 
 _OCR_DPI = 200
 _VISION_DPI = 150
+_VISION_MAX_TOKENS = 4096
 _MAX_RENDER_PX = 40_000_000
 _OCR_MIN_CHARS = 24
 _LANG_MIN_CHARS = 20
@@ -145,7 +146,7 @@ class PymupdfParser:
             return page
 
         try:
-            result = await self._vision_llm.generate(_VISION_PROMPT, images=[png], max_tokens=2048)
+            result = await self._vision_llm.generate(_VISION_PROMPT, images=[png], max_tokens=_VISION_MAX_TOKENS)
             text = self.clean(result.text)
         except Exception:
             text = ""

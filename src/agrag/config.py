@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 
 class LLMConfig(BaseModel):
     provider: str = "fake"
-    model: str = "gemma3:12b"
+    model: str = "gemma4:12b"
     small_model: str = "gemma3:4b"
     host: str = "http://localhost:11434"
     max_tokens: int = 1024
