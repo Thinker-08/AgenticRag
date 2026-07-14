@@ -32,7 +32,6 @@ ml = [
 ]
 pdf = [
     "PyMuPDF>=1.24",
-    "pdfplumber>=0.11",
     "pytesseract>=0.3",
     "ftfy>=6.2",
     "lingua-language-detector>=2.0",

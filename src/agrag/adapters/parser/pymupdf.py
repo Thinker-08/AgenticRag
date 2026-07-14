@@ -2,13 +2,12 @@ from __future__ import annotations
 
 import asyncio
 import importlib
-import io
 import re
 import unicodedata
 from collections import defaultdict
 
 from ...config import ParserConfig
-from ...contracts import Block, BlockType, Page, ParsedDoc, ParseTier, Table
+from ...contracts import Block, BlockType, Page, ParsedDoc, ParseTier
 from ...interfaces import LLM
 from ...security.sanitize import neutralizeTemplateTokens
 from .mathdetect import looksLikeEquation
@@ -41,7 +40,6 @@ class PymupdfParser:
             raise ImportError("PymupdfParser needs the 'pdf' extra: pip install -e '.[pdf]'") from e
         self._fitz = fitz
 
-        self._pdfplumber = tryImport("pdfplumber")
         self._pytesseract = tryImport("pytesseract")
         self._Image = tryImport("PIL.Image")
         if self._Image is None:
@@ -59,15 +57,12 @@ class PymupdfParser:
             if page_count > self._cfg.max_pages:
                 raise ValueError(f"PDF has {page_count} pages, exceeds max_pages={self._cfg.max_pages} (suspected PDF-bomb)")
 
-            tables_by_page = await asyncio.to_thread(self.extractTables, data, doc_id)
-
             pages: list[Page] = []
             extracted_chars = 0
             for i in range(page_count):
                 page, png = await asyncio.to_thread(self.processPage, doc, i, doc_id)
                 if png is not None:
                     page = await self.visionPage(page, png, i, doc_id)
-                self.mergeTables(page, tables_by_page.get(i, []))
                 self.orderBlocks(page)
                 pages.append(page)
 
@@ -155,35 +150,6 @@ class PymupdfParser:
             page.blocks = [self.singleBlock(doc_id, i, text, (0.0, 0.0, page.width, page.height))]
         return page
 
-    def extractTables(self, data: bytes, doc_id: str) -> dict[int, list[Table]]:
-        if self._pdfplumber is None:
-            return {}
-
-        out: dict[int, list[Table]] = {}
-        try:
-            with self._pdfplumber.open(io.BytesIO(data)) as pdf:
-                for i, ppage in enumerate(pdf.pages):
-                    tables: list[Table] = []
-                    for j, found in enumerate(ppage.find_tables()):
-                        grid = found.extract() or []
-                        grid = [[(c or "").strip() for c in row] for row in grid if row]
-                        if not grid:
-                            continue
-                        bbox = tuple(float(v) for v in found.bbox)
-                        tbl = Table(block_id=f"{doc_id}:p{i + 1}:tbl{j}", page=i + 1, bbox=bbox, grid=grid, n_header_rows=1)
-                        tbl.validateChecksum()
-                        tables.append(tbl)
-                    if tables:
-                        out[i] = tables
-        except Exception:
-            return {}
-
-        return out
-
-    def mergeTables(self, page: Page, tables: list[Table]) -> None:
-        for t in tables:
-            page.blocks.append(Block(block_id=t.block_id, page=t.page, type=BlockType.TABLE, bbox=t.bbox, text=t.linearize(), table=t))
-
     def orderBlocks(self, page: Page) -> None:
         page.blocks.sort(key=lambda b: (self.colBucket(b.bbox[0], page.width), b.bbox[1]))
         for order, b in enumerate(page.blocks):
@@ -200,8 +166,6 @@ class PymupdfParser:
         key_pages: dict[tuple, set[int]] = defaultdict(set)
         for p in pages:
             for b in p.blocks:
-                if b.type == BlockType.TABLE:
-                    continue
                 key_pages[self.boilerKey(b)].add(p.page_no)
 
         n = len(pages)
@@ -210,7 +174,7 @@ class PymupdfParser:
             return
 
         for p in pages:
-            p.blocks = [b for b in p.blocks if b.type == BlockType.TABLE or self.boilerKey(b) not in boiler]
+            p.blocks = [b for b in p.blocks if self.boilerKey(b) not in boiler]
             for order, b in enumerate(p.blocks):
                 b.reading_order = order
 

@@ -8,7 +8,6 @@ from pydantic import BaseModel, Field
 
 class ChunkKind(str, Enum):
     PROSE = "prose"
-    TABLE = "table"
     FIGURE = "figure"
     EQUATION = "equation"
     LIST = "list"
@@ -31,7 +30,6 @@ class Chunk(BaseModel):
     linearized_text: str = ""
     context_blurb: str = ""
     parent_id: Optional[str] = None
-    linked_block: Optional[str] = None
     embedding_model: str = ""
     embedding_version: str = ""
     content_hash: str = ""

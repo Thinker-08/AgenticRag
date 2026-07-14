@@ -4,8 +4,8 @@ from ..config import ChunkerConfig
 from ..contracts import Block, BlockType, Chunk, ChunkKind, ParsedDoc
 from .hashing import contentHash
 
-_ATOMIC = {BlockType.TABLE, BlockType.LIST, BlockType.EQUATION, BlockType.FIGURE}
-_KIND = {BlockType.TABLE: ChunkKind.TABLE, BlockType.LIST: ChunkKind.LIST, BlockType.EQUATION: ChunkKind.EQUATION, BlockType.FIGURE: ChunkKind.FIGURE}
+_ATOMIC = {BlockType.LIST, BlockType.EQUATION, BlockType.FIGURE}
+_KIND = {BlockType.LIST: ChunkKind.LIST, BlockType.EQUATION: ChunkKind.EQUATION, BlockType.FIGURE: ChunkKind.FIGURE}
 
 
 def mkChunk(doc: ParsedDoc, cid: str, text: str, *, page: int, kind: ChunkKind, block: Block | None, parent_id: str | None, is_parent: bool, breadcrumb: list[str], links: list[str] | None = None) -> Chunk:
@@ -16,10 +16,8 @@ def mkChunk(doc: ParsedDoc, cid: str, text: str, *, page: int, kind: ChunkKind, 
 
     if all_links:
         meta["links"] = all_links
-    if block and block.table and not block.table.checksum_ok:
-        meta["low_confidence_table"] = True
 
-    return Chunk(chunk_id=cid, doc_id=doc.doc_id, tenant_id=doc.tenant_id, page_no=page, bbox=block.bbox if block else (0, 0, 0, 0), section_breadcrumb=list(breadcrumb), kind=kind, atomic=kind in {ChunkKind.TABLE, ChunkKind.LIST, ChunkKind.EQUATION, ChunkKind.FIGURE}, text=text, linearized_text=linearized, parent_id=parent_id, linked_block=block.block_id if block and block.table else None, content_hash=contentHash(text), lang=block.lang if block else "en", extra_metadata=meta)
+    return Chunk(chunk_id=cid, doc_id=doc.doc_id, tenant_id=doc.tenant_id, page_no=page, bbox=block.bbox if block else (0, 0, 0, 0), section_breadcrumb=list(breadcrumb), kind=kind, atomic=kind in {ChunkKind.LIST, ChunkKind.EQUATION, ChunkKind.FIGURE}, text=text, linearized_text=linearized, parent_id=parent_id, content_hash=contentHash(text), lang=block.lang if block else "en", extra_metadata=meta)
 
 
 def splitWords(text: str, size: int, overlap: int) -> list[str]:
