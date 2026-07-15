@@ -92,12 +92,25 @@ class HierarchicalChunker:
         return chunks
 
 
-class RecursiveChunker:
+class LangchainRecursiveChunker:
+    """Naive fixed-size baseline, used only as the eval control (``agrag eval``).
+
+    Backed by langchain's ``RecursiveCharacterTextSplitter``. Length is measured
+    in words (not characters) so chunk granularity stays comparable to the prior
+    baseline (size=512, overlap=77) and the eval delta doesn't shift on a units
+    change. langchain is an ``eval`` extra, so the import is deferred to here —
+    the production ``hierarchical`` path never touches it.
+    """
+
     name = "recursive"
 
     def __init__(self, size: int = 512, overlap: int = 77) -> None:
-        self.size = size
-        self.overlap = overlap
+        try:
+            from langchain_text_splitters import RecursiveCharacterTextSplitter
+        except ImportError as exc:
+            raise ImportError("langchain-text-splitters is required for the recursive baseline chunker; install with: pip install -e '.[eval]'") from exc
+
+        self._splitter = RecursiveCharacterTextSplitter(chunk_size=size, chunk_overlap=overlap, length_function=lambda t: len(t.split()))
 
     def split(self, doc: ParsedDoc) -> list[Chunk]:
         chunks: list[Chunk] = []
@@ -105,7 +118,9 @@ class RecursiveChunker:
 
         for page in doc.pages:
             text = "\n".join(b.text for b in sorted(page.blocks, key=lambda b: b.reading_order))
-            for piece in splitWords(text, self.size, self.overlap):
+            if not text.strip():
+                continue
+            for piece in self._splitter.split_text(text):
                 cid = f"{doc.doc_id}:p{page.page_no}:c{n}"
                 chunks.append(Chunk(chunk_id=cid, doc_id=doc.doc_id, tenant_id=doc.tenant_id, page_no=page.page_no, kind=ChunkKind.PROSE, text=piece, linearized_text=piece, content_hash=contentHash(piece), extra_metadata={**doc.extra_metadata, "is_parent": False}))
                 n += 1
@@ -113,44 +128,7 @@ class RecursiveChunker:
         return chunks
 
 
-class SemanticChunker(HierarchicalChunker):
-    name = "semantic"
-
-    def __init__(self, embedder, *, breakpoint_pctl: int = 90, child_size: int = 320, parent_size: int = 1500) -> None:
-        super().__init__(child_size=child_size, parent_size=parent_size, overlap=0)
-        self._embed = embedder
-        self._pctl = breakpoint_pctl
-
-    def splitProse(self, body: str) -> list[str]:
-        import numpy as np
-
-        from ..promptfmt import sentences
-
-        sents = sentences(body)
-        if len(sents) <= 2:
-            return [body] if body.strip() else []
-
-        vecs = np.asarray(self._embed.encodeDocuments(sents).dense, dtype=np.float32)
-        norms = np.clip(np.linalg.norm(vecs, axis=1), 1e-8, None)
-        unit = vecs / norms[:, None]
-        sims = np.array([float(unit[i] @ unit[i + 1]) for i in range(len(sents) - 1)])
-        thresh = float(np.percentile(-sims, self._pctl)) if len(sims) else 0.0
-
-        segments, cur = [], [sents[0]]
-        for i in range(len(sims)):
-            if -sims[i] >= thresh and len(" ".join(cur)) > self.child:
-                segments.append(" ".join(cur))
-                cur = []
-            cur.append(sents[i + 1])
-
-        if cur:
-            segments.append(" ".join(cur))
-        return segments
-
-
-def buildChunker(cfg: ChunkerConfig, embedder=None):
+def buildChunker(cfg: ChunkerConfig):
     if cfg.provider == "recursive":
-        return RecursiveChunker(size=512, overlap=77)
-    if cfg.provider == "semantic" and embedder is not None:
-        return SemanticChunker(embedder, child_size=cfg.child_size, parent_size=cfg.parent_size)
+        return LangchainRecursiveChunker()
     return HierarchicalChunker(child_size=cfg.child_size, parent_size=cfg.parent_size, overlap=cfg.overlap)

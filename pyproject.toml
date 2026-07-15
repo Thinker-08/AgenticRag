@@ -47,6 +47,7 @@ obs = [
 eval = [
     "ragas>=0.1",
     "datasets>=2.19",
+    "langchain-text-splitters>=0.2",
 ]
 dev = [
     "ruff>=0.4",
