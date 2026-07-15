@@ -39,11 +39,6 @@ def makeLlm(settings: Settings, model: str) -> LLM:
 
 
 def makeEmbedding(settings: Settings) -> EmbeddingModel:
-    if settings.embedding.provider == "hash":
-        from .adapters.embedding.hash import HashEmbedding
-
-        return HashEmbedding(dim=settings.embedding.dim, version=settings.embedding.version)
-
     if settings.embedding.provider == "bge_m3":
         from .adapters.embedding.bge_m3 import BgeM3Embedding
 
@@ -142,10 +137,10 @@ def makeParser(settings: Settings, vision_llm: LLM):
     return PymupdfParser(cfg=settings.parser, vision_llm=vision_llm)
 
 
-def makeChunker(settings: Settings, embedder=None):
+def makeChunker(settings: Settings):
     from .ingestion.chunker import buildChunker
 
-    return buildChunker(settings.chunker, embedder=embedder)
+    return buildChunker(settings.chunker)
 
 
 def makeSandbox(settings: Settings):
@@ -174,7 +169,7 @@ def buildDeps(settings: Settings | None = None) -> Deps:
     cache = makeCache(settings)
     retriever = HybridRetriever(embedding=embedding, vectorstore=vectorstore, lexical=lexical, reranker=reranker, cfg=settings.retrieval, cache=cache if settings.cache.answers_enabled else None)
 
-    return Deps(settings=settings, llm=llm, small_llm=small_llm, embedding=embedding, vectorstore=vectorstore, lexical=lexical, docstore=makeDocstore(settings), reranker=reranker, grader=makeGrader(settings, small_llm), verifier=makeVerifier(settings), cache=cache, tracer=makeTracer(settings), parser=makeParser(settings, llm), chunker=makeChunker(settings, embedder=embedding), toolrunner=makeSandbox(settings), retriever=retriever, sessions=makeSessions(settings))
+    return Deps(settings=settings, llm=llm, small_llm=small_llm, embedding=embedding, vectorstore=vectorstore, lexical=lexical, docstore=makeDocstore(settings), reranker=reranker, grader=makeGrader(settings, small_llm), verifier=makeVerifier(settings), cache=cache, tracer=makeTracer(settings), parser=makeParser(settings, llm), chunker=makeChunker(settings), toolrunner=makeSandbox(settings), retriever=retriever, sessions=makeSessions(settings))
 
 
 def buildApp(settings: Settings | None = None):

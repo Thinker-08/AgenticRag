@@ -9,7 +9,7 @@ llm:
   host: http://localhost:11434
 
 embedding:
-  provider: hash
+  provider: bge_m3
   model: BAAI/bge-m3
   version: "1.5"
   dim: 1024

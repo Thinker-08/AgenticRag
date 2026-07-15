@@ -19,7 +19,7 @@ class LLMConfig(BaseModel):
 
 
 class EmbeddingConfig(BaseModel):
-    provider: str = "hash"
+    provider: str = "bge_m3"
     model: str = "BAAI/bge-m3"
     version: str = "1.5"
     dim: int = 1024
