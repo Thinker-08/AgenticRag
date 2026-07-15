@@ -27,7 +27,7 @@ class EmbeddingConfig(BaseModel):
 
 
 class VectorStoreConfig(BaseModel):
-    provider: str = "memory"
+    provider: str = "qdrant"
     host: str = "http://localhost:6333"
     collection: str = "agrag_chunks"
     quantize: str = "none"

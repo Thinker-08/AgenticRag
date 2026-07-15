@@ -48,11 +48,6 @@ def makeEmbedding(settings: Settings) -> EmbeddingModel:
 
 
 def makeVectorstore(settings: Settings):
-    if settings.vectorstore.provider == "memory":
-        from .adapters.vectorstore.memory import MemoryVectorStore
-
-        return MemoryVectorStore()
-
     if settings.vectorstore.provider == "qdrant":
         from .adapters.vectorstore.qdrant import QdrantVectorStore
 

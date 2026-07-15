@@ -15,7 +15,8 @@ embedding:
   dim: 1024
 
 vectorstore:
-  provider: memory
+  provider: qdrant
+  host: http://localhost:6333
   collection: agrag_chunks
   quantize: none
 
